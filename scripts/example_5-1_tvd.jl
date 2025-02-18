@@ -1,6 +1,7 @@
 using MEK9470
 using LinearAlgebra
 using CairoMakie
+using Logging
 ##Parameters
 A = 0.0
 B = 1.0
