@@ -104,6 +104,8 @@ function solve_5_1(u=0.1, N=5, discretization::AbstractDiscretization = CentralD
 
 
     M, b = assemble_system(discretization, F, D_w, D_e, N)
+    @debug "M = $M"
+    @debug "b = $b"
 
     ϕ = M\b
     return x, ϕ
@@ -115,7 +117,18 @@ function get_exact_solution(u)
     ϕ_exact = (ϕ_B - ϕ_A) *(exp.(F.*x_fine./Γ) .- 1) ./ (exp.(F*B./Γ) .- 1) .+ ϕ_A
     return x_fine, ϕ_exact
 end
-
+##
+using Logging
+with_logger(ConsoleLogger(stderr, Logging.Debug)) do
+    x, ϕ = solve_5_1(0.2, 5, QUICK())
+    ϕ_exact, x_fine = get_exact_solution(0.2)
+    fig = Figure()
+    ax = Axis(fig[1,1])
+    scatterlines!(ax, x, ϕ)
+    lines!(ax, x_fine, ϕ_exact, color=:black, linestyle=:dash, label="Exact")
+    display(fig)
+    @show ϕ
+end
 ##
 # Create plots for each case
 cases = ["i)", "ii)", "iii)", "bonus"]

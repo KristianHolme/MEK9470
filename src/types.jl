@@ -25,7 +25,7 @@ struct Sweby <: AbstractLimiter
     end
 end
 struct UMIST <: AbstractLimiter end
-
+struct QUICKlimiter <: AbstractLimiter end
 
 function apply_limiter end
 
@@ -55,4 +55,8 @@ end
 
 function apply_limiter(limiter::UD, r)
     return 0.0
+end
+
+function apply_limiter(limiter::QUICKlimiter, r)
+    return max(0, min(2r, (3+r)/4, 2))
 end

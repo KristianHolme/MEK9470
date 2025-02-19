@@ -8,7 +8,7 @@ B = 1.0
 ρ = 1
 Γ = 0.1
 ϕ_A = 1.0
-ϕ_B = 0.0
+ϕ_B = 0.3
 ##
 
 function r_e(ϕ, P)
@@ -18,11 +18,11 @@ function r_e(ϕ, P)
     if P == firstindex(ϕ)
         r = 2*(ϕ[P] - ϕ_A) / (ϕ[E] - ϕ[P])
     elseif P == lastindex(ϕ)
-        r = (ϕ[P] - ϕ[W]) / (ϕ_B - ϕ[P]) #not times two because that implies negativity
+        r = (ϕ[P] - ϕ[W]) / (2*(ϕ_B - ϕ[P])) #not times two because that implies negativity
     else
         r = (ϕ[P] - ϕ[W]) / (ϕ[E] - ϕ[P])
     end
-    r > 0 || @logmsg Logging.LogLevel(-1) "r_e = $r is negative for P = $P, ϕ = $ϕ"
+    r > 0 || @logmsg Logging.LogLevel(-1) "r_e = $r is negative for P = $P"
     return r
 end
 
@@ -38,7 +38,7 @@ function r_w(ϕ, P)
     else
         r = (ϕ[W] - ϕ[WW]) / (ϕ[P] - ϕ[W])
     end
-    r > 0 || @logmsg Logging.LogLevel(-1) "r_w = $r is negative for P = $P, ϕ = $ϕ"
+    r > 0 || @logmsg Logging.LogLevel(-1) "r_w = $r is negative for P = $P"
     return r
 end
 
@@ -51,7 +51,7 @@ function update_b!(b, ϕ, D, F, Discretization)
         b[P] = - F/2 * ψ(r_e(ϕ, P))*(ϕ[E] - ϕ[P]) 
                + F/2 * ψ(r_w(ϕ, P))*(ϕ[P] - ϕ[W])
     end
-    b[end] = (-F + D)*ϕ_B + F/2 * ψ(r_w(ϕ, lastindex(ϕ)))*(ϕ[end] - ϕ[end-1]) 
+    b[end] = (D-F)*ϕ_B + F/2 * ψ(r_w(ϕ, lastindex(ϕ)))*(ϕ[end] - ϕ[end-1]) 
     return b
 end
 
@@ -61,15 +61,15 @@ function solve_tvd(N, u, Discretization)
     D = Γ / dx
     a_w = (D+F) .* ones(N-1)
     a_e = D .* ones(N-1)
-    a_e[1] = D
     a_p = (2D+F) .* ones(N)
-    a_p[1] = 2D+F
     a_p[end] = 2D
     M = Tridiagonal(-a_w, a_p, -a_e)
+    @debug "M = $M"
     ϕ = ϕ_A .* (1 .- x) + ϕ_B .* x
-    ϕ_prev = ϕ .* 0
+    ϕ_prev = zeros(N)
     b = zeros(N)
     update_b!(b, ϕ, D, F, Discretization)
+    @debug "b = $b"
     error = norm(ϕ - ϕ_prev)
     its = 0
     while error > 1e-10 && its < 1000
@@ -99,36 +99,51 @@ function error(ϕ, ϕ_exact, dx)
     return sqrt(error)  # Need to take the square root for L2 norm
 end
 ##
-Discretization = TVD(VanLeer())
+using Logging
+Discretization = TVD(UMIST())
+# Discretization = TVD(UD())
 u = 0.1
-N = 200
-ϕ, x, its = solve_tvd(N, u, Discretization);
-ϕ_exact, x_fine = get_exact_solution(u, x=x);
-scatterlines(x, ϕ-ϕ_exact)
+N = 5
+with_logger(ConsoleLogger(stderr, Logging.Info)) do
+    ϕ, x, its = solve_tvd(N, u, Discretization);
+    ϕ_exact, x_fine = get_exact_solution(u, x=x);
+    fig = Figure()
+    ax = Axis(fig[1,1], title="error")
+    scatterlines!(ax, x, ϕ-ϕ_exact)
+    ax2 = Axis(fig[1,2], title="ϕ")
+    scatterlines!(ax2, x, ϕ, label="TVD")
+    lines!(ax2, x_fine, ϕ_exact, color=:black, linestyle=:dash, label="Exact")
+    display(fig)
+    @show ϕ
+    @show x
+end
+
 ##
 # Create plots for each case
 cases = ["i)", "i.2)", "ii)", "iii)"]
 us = [0.1, 0.1,  2.5, 2.5]
-Ns = [5, 8, 5, 256]
+Ns = [5, 8, 5, 90]
 
 fig = Figure(size=(800, 600))
 axes = [Axis(fig[i÷3+1, mod1(i, 2)], title = "Case $(cases[i]): u = $(us[i]), N = $(Ns[i])") for i in eachindex(cases)]
 
-idxs = 1:7
+idxs = 2:8
 limiters = [UD(),
             VanLeer(),
             VanAlbada(),
             Minmod(),
             Superbee(),
             Sweby(),
-            UMIST()][idxs]
+            UMIST(),
+            QUICKlimiter()][idxs]
 limiter_names = ["UD",
                  "VanLeer",
                  "VanAlbada",
                  "Minmod",
                  "Superbee",
                  "Sweby",
-                 "UMIST"][idxs]
+                 "UMIST",
+                 "QUICK"][idxs]
 
 for (i, u) in enumerate(us)
     @debug "case $i"
@@ -144,7 +159,9 @@ for (i, u) in enumerate(us)
 end
 
 # Add a single legend for all plots
-fig[end+1,:] = Legend(fig, axes[1], "Methods", framevisible=false, merge=true, orientation=:horizontal)
+fig[end+1,:] = Legend(fig, axes[1], "Methods", 
+                framevisible=false, merge=true, 
+                orientation=:horizontal, nbanks=2)
 Label(fig[0,:], "Example 5.1")
 # Adjust layout
 for ax in axes
@@ -157,7 +174,7 @@ fig
 save("plots/example_5-1_comparison.png", fig)
 ## Error analysis
 us = [0.1, 2.5]
-Ns = 2 .^ (3:11)
+Ns = 2 .^ (3:8)
 fig = Figure(size=(800, 600))
 axes = [Axis(fig[i, 1],
             title = "u = $(us[i])",
@@ -166,32 +183,45 @@ axes = [Axis(fig[i, 1],
             xlabel="N",
             ylabel="L2 error") for i in eachindex(us)]
 
+conv_lines=[]
+order_lines=[]
 for (i, u) in enumerate(us)
     max_error = -Inf  # Track maximum error across all limiters
-    
     for (j, limiter) in enumerate(limiters)
-        sols = []
         L2_errors = []
         discretization = TVD(limiter)
         for N in Ns
             ϕ, x, its = solve_tvd(N, u, discretization);
             ϕ_exact, x_fine = get_exact_solution(u, x=x);
             dx = x[2] - x[1]
-            push!(sols, ϕ)
+            if any(isnan.(ϕ))
+                @error "ϕ is NaN for N = $N, limiter = $limiter"
+            end
             push!(L2_errors, error(ϕ, ϕ_exact, dx))
         end
         max_error = max(max_error, maximum(L2_errors))  # Update maximum error
-        lines!(axes[i], Ns, L2_errors, label=limiter_names[j])
+        l = lines!(axes[i], Ns, L2_errors, label=limiter_names[j])
+        i == 1 && push!(conv_lines, l)
     end
-    
-    # Add reference lines for convergence rates
+    i == 2 && @show max_error
+    # Add reference lines for convergence rates, scaled to current plot's data
     ref_x = [minimum(Ns), maximum(Ns)]
-    ref_y_first = [1.0, 1.0/maximum(Ns)] * max_error  # First-order reference line
-    ref_y_second = [1.0, 1.0/maximum(Ns)^2] * max_error  # Second-order reference line
-    lines!(axes[i], ref_x, ref_y_first, linestyle=:dash, color=:black, label="First order")
-    lines!(axes[i], ref_x, ref_y_second, linestyle=:dot, color=:black, label="Second order")
+    ref_y_first = [max_error, max_error * (minimum(Ns)/maximum(Ns))]  # First-order reference line
+    ref_y_second = [max_error, max_error * (minimum(Ns)/maximum(Ns))^2]  # Second-order reference line
+    
+    o1 = lines!(axes[i], ref_x, ref_y_first, linestyle=:dash, color=:black, label="First order")
+    o2 = lines!(axes[i], ref_x, ref_y_second, linestyle=:dot, color=:black, label="Second order")
+    i == 1 && push!(order_lines, o1)
+    i == 1 && push!(order_lines, o2)
 end
 # Add a single legend for all plots
-fig[end+1,:] = Legend(fig, axes[1], "Methods", framevisible=false, merge=true, orientation=:horizontal)
+fig[end+1,:] = Legend(fig,
+                    [conv_lines, order_lines], 
+                    [limiter_names, ["First order", "Second order"]],
+                    ["Methods", "Convergence"],
+                    framevisible=false,
+                    merge=true,
+                    orientation=:vertical,
+                    nbanks=8)
 display(fig)
 ##
