@@ -18,7 +18,7 @@ function r_e(ϕ, P)
     if P == firstindex(ϕ)
         r = 2*(ϕ[P] - ϕ_A) / (ϕ[E] - ϕ[P])
     elseif P == lastindex(ϕ)
-        r = (ϕ[P] - ϕ[W]) / (2*(ϕ_B - ϕ[P])) #not times two because that implies negativity
+        r = (ϕ[P] - ϕ[W]) / (2*(ϕ_B - ϕ[P]))
     else
         r = (ϕ[P] - ϕ[W]) / (ϕ[E] - ϕ[P])
     end
@@ -85,7 +85,8 @@ end
 
 function get_exact_solution(u;x=collect(LinRange(A, B, 100)))
     F = ρ*u
-    ϕ_exact = (ϕ_B - ϕ_A) *(exp.(F.*x./Γ) .- 1) ./ (exp.(F*B./Γ) .- 1) .+ ϕ_A
+    L = B-A
+    ϕ_exact = (ϕ_B - ϕ_A) * (exp.(F.*x./Γ) .- 1) ./ (exp.(F*L./Γ) .- 1) .+ ϕ_A
     return ϕ_exact, x
 end
 
@@ -103,19 +104,19 @@ using Logging
 Discretization = TVD(UMIST())
 # Discretization = TVD(UD())
 u = 0.1
-N = 5
+N = 8
 with_logger(ConsoleLogger(stderr, Logging.Info)) do
     ϕ, x, its = solve_tvd(N, u, Discretization);
     ϕ_exact, x_fine = get_exact_solution(u, x=x);
     fig = Figure()
-    ax = Axis(fig[1,1], title="error")
+    ax = Axis(fig[1,1], title="error", xlabel="x", ylabel="error")
     scatterlines!(ax, x, ϕ-ϕ_exact)
-    ax2 = Axis(fig[1,2], title="ϕ")
+    ax2 = Axis(fig[1,2], title="ϕ", xlabel="x", ylabel="ϕ")
     scatterlines!(ax2, x, ϕ, label="TVD")
     lines!(ax2, x_fine, ϕ_exact, color=:black, linestyle=:dash, label="Exact")
     display(fig)
-    @show ϕ
     @show x
+    @show ϕ
 end
 
 ##
@@ -218,7 +219,7 @@ end
 fig[end+1,:] = Legend(fig,
                     [conv_lines, order_lines], 
                     [limiter_names, ["First order", "Second order"]],
-                    ["Methods", "Convergence"],
+                    ["Limiter Functions", "Convergence"],
                     framevisible=false,
                     merge=true,
                     orientation=:vertical,
