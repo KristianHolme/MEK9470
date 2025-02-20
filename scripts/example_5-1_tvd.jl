@@ -44,14 +44,14 @@ end
 
 function update_b!(b, ϕ, D, F, Discretization)      
     ψ(r) = apply_limiter(Discretization.limiter, r)
-    b[1] = (D+F)*ϕ_A - F/2 * ψ(r_e(ϕ, firstindex(ϕ)))*(ϕ[2] - ϕ[1])
+    b[1] = (2D+F)*ϕ_A - F/2 * ψ(r_e(ϕ, firstindex(ϕ)))*(ϕ[2] - ϕ[1])
     for P in 2:(lastindex(ϕ)-1)
         E = P+1
         W = P-1
         b[P] = - F/2 * ψ(r_e(ϕ, P))*(ϕ[E] - ϕ[P]) 
                + F/2 * ψ(r_w(ϕ, P))*(ϕ[P] - ϕ[W])
     end
-    b[end] = (D-F)*ϕ_B + F/2 * ψ(r_w(ϕ, lastindex(ϕ)))*(ϕ[end] - ϕ[end-1]) 
+    b[end] = (2D)*ϕ_B + F/2 * ψ(r_w(ϕ, lastindex(ϕ)))*(ϕ[end] - ϕ[end-1]) 
     return b
 end
 
@@ -62,14 +62,15 @@ function solve_tvd(N, u, Discretization)
     a_w = (D+F) .* ones(N-1)
     a_e = D .* ones(N-1)
     a_p = (2D+F) .* ones(N)
-    a_p[end] = 2D
+    a_p[1] = 2D+F +D
+    a_p[end] = 2D+D + F
     M = Tridiagonal(-a_w, a_p, -a_e)
-    @debug "M = $M"
+    #@debug "M = $M"
     ϕ = ϕ_A .* (1 .- x) + ϕ_B .* x
     ϕ_prev = zeros(N)
     b = zeros(N)
     update_b!(b, ϕ, D, F, Discretization)
-    @debug "b = $b"
+    #@debug "b = $b"
     error = norm(ϕ - ϕ_prev)
     its = 0
     while error > 1e-10 && its < 1000
@@ -79,6 +80,7 @@ function solve_tvd(N, u, Discretization)
         update_b!(b, ϕ, D, F, Discretization)
         ϕ .= M\b
         error = norm(ϕ - ϕ_prev)
+        @debug "error = $error"
     end
     return ϕ, x, its
 end
@@ -101,11 +103,11 @@ function error(ϕ, ϕ_exact, dx)
 end
 ##
 using Logging
-Discretization = TVD(UMIST())
-# Discretization = TVD(UD())
-u = 0.1
-N = 8
-with_logger(ConsoleLogger(stderr, Logging.Info)) do
+Discretization = TVD(QUICKlimiter())
+#Discretization = TVD(UD())
+u = 1.0
+N = 10
+with_logger(ConsoleLogger(stderr, Logging.Debug)) do
     ϕ, x, its = solve_tvd(N, u, Discretization);
     ϕ_exact, x_fine = get_exact_solution(u, x=x);
     fig = Figure()
@@ -115,8 +117,6 @@ with_logger(ConsoleLogger(stderr, Logging.Info)) do
     scatterlines!(ax2, x, ϕ, label="TVD")
     lines!(ax2, x_fine, ϕ_exact, color=:black, linestyle=:dash, label="Exact")
     display(fig)
-    @show x
-    @show ϕ
 end
 
 ##
