@@ -216,11 +216,11 @@ for (i, u) in enumerate(us)
     i == 2 && @show max_error
     # Add reference lines for convergence rates, scaled to current plot's data
     ref_x = [minimum(Ns), maximum(Ns)]
-    ref_y_first = [max_error, max_error * (minimum(Ns)/maximum(Ns))]  # First-order reference line
-    ref_y_second = [max_error, max_error * (minimum(Ns)/maximum(Ns))^2]  # Second-order reference line
+    ref_y_first = [max_error, max_error * (minimum(Ns)/maximum(Ns))]*1.3  # First-order reference line
+    ref_y_second = [max_error, max_error * (minimum(Ns)/maximum(Ns))^2]*0.8  # Second-order reference line
     
-    o1 = lines!(axes[i], ref_x, ref_y_first, linestyle=:dash, color=:red, label="First order")
-    o2 = lines!(axes[i], ref_x, ref_y_second, linestyle=:dot, color=:red, label="Second order")
+    o1 = lines!(axes[i], ref_x, ref_y_first, linestyle=:dash, color=:black, label="First order")
+    o2 = lines!(axes[i], ref_x, ref_y_second, linestyle=:dot, color=:black, label="Second order")
     i == 1 && push!(order_lines, o1)
     i == 1 && push!(order_lines, o2)
 end
