@@ -12,8 +12,8 @@ ax = Axis(fig[1,1],
     ylabel = "ψ(r)")
 
 # Plot each limiter function
-limiters = [VanLeer(), VanAlbada(), Minmod(), Superbee(), Sweby(), UMIST()]
-limiter_names = ["VanLeer", "VanAlbada", "Minmod", "Superbee", "Sweby", "UMIST"]
+limiters = [VanLeer(), VanAlbada(), Minmod(), Superbee(), Sweby(), UMIST(), QUICKlimiter()]
+limiter_names = ["VanLeer", "VanAlbada", "Minmod", "Superbee", "Sweby", "UMIST", "QUICK"]
 
 for (limiter, name) in zip(limiters, limiter_names)
     psi = [apply_limiter(limiter, ri) for ri in r]
