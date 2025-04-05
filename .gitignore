@@ -1,3 +1,13 @@
 .vscode/
 plots/
 foam/
+polyMesh/
+dynamicCode/
+[0-9]*/
+[0-9]*.[0-9]*/
+# Allow folder named exactly '0'
+!/0/
+*.c
+Allclean
+Allrun
+*.foam
