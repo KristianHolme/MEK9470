@@ -1,0 +1,261 @@
+---
+title: "MEK9470 Mandarory Exercise 1"
+author: "Kristian Holme"
+format: 
+    html:
+        embed-resources: true
+        code-line-numbers: false
+editor: 
+    render-on-save: true
+bibliography: references.bib
+csl: ieee.csl
+---
+
+# A 1D TVD solver
+
+Here we solve the one-dimensional convection-diffusion equation using a selection of Total Variation Diminishing (TVD) schemes. The governing equation is given by
+
+$$
+\frac{d}{dx} (\rho u \phi) = \frac{d}{dx} \left( \Gamma \frac{d\phi}{dx} \right)
+$$
+
+where $\phi$ is the scalar field, $\rho$ is the density, $u$ is the velocity, and $\Gamma$ is the diffusivity.
+
+TVD schemes, as the name suggests, are a class of schemes that are designed to satisfy the Total Variation Diminishing (TVD) property. This property ensures that the solution will not increase the total variation of the solution. This property is also called *monotonicity preserving*.That is, a local minimum or maximum will not be over- or undershot. This inhibits the development of spurious oscillations.
+
+The TVD schemes can be written as a standard upwind scheme, with an added limiter to ensure the TVD property. The general form of the TVD scheme is given by
+
+For the east face value $\phi_e$ we can write as in @versteeg2007, if the upwind direction is to the west,
+
+$$
+\phi_e = \phi_P + \frac{1}{2} \psi(r) \left(\phi_P - \phi_E\right),
+$$ where $\psi(r)$ is a limiter function, and $r$ is the ratio of the gradients on either side of the face, given by
+
+$$
+r = \frac{\phi_P - \phi_W}{\phi_E - \phi_P}.
+$$
+
+The shape of valid TVD limiters must follow a set of rules to be second order. Following these rules are equivalent to being bounded by the second order region in the \$\psi -r plane, as given in @fig-limiters.
+
+![Limiters functions and second order region](figures/tvd/limiter_functions.svg){#fig-limiters}
+
+We use the set of limiters given by @fig-limiters to solve the convection-diffusion equation. We use the parameters as given in example 5.1 in @versteeg2007. @fig-tvd-comparison shows the solutions for the three different configurations.
+
+![TVD solutions](figures/tvd/tvd_comparison.svg){#fig-tvd-comparison}
+
+We see that for case (ii), all the TVD schemes deviate from the exact solution, as the grid resolution is too coarse. However, this does not result in explosive or oscillatory solutions, as expected by the TVD property. @fig-tvd-convergence shows the convergence of the different schemes. We see that the TVD schemes converge at second order, as expected.
+
+![TVD convergence](figures/tvd/tvd_convergence.svg){#fig-tvd-convergence}
+
+# Backwards facing step
+
+Here we solve the backwards facing step problem for $Re = 200$. We use a grid where the inlet has height H = 1, and the width of the channel is 2. The length of the inlet is 5, and the lenght of the channel is 15. 
+
+## Constant inlet velocity
+@fig-bs-200-umag shows the the magnitude of the velocity field with a constant and a parabolic inlet velocity. The parabolic profile is determined by 
+
+$$
+u(y) = 6 y(1 - y),
+$$
+
+We see that the flow is separatates from the back step and forms a recirculation region. 
+
+::: {#fig-bs-200-umag layout-nrow=2}
+
+![Constant inlet velocity](figures/backstep/Re200_const_u_mag_crop.png){#fig-bs-200-umag-const}
+
+
+![Parabolic inlet velocity](figures/backstep/Re200_par_u_mag_crop.png){#fig-bs-200-umag-par}
+
+
+Velocity magnitude for Re = 200 with constant and parabolic inlet velocity.
+:::
+
+We notice the two flows, and the two recirculation regions are very similar. The only noticeable difference is in the inlet region, which is shown magnified and with streamlines in @fig-bs-200-inlet.
+
+:::{#fig-bs-200-inlet}
+
+![Constant inlet velocity](figures/backstep/Re200_const_inlet_crop.png){#fig-bs-200-inlet-const}
+
+![Parabolic inlet velocity](figures/backstep/Re200_par_inlet_crop.png){#fig-bs-200-inlet-par}
+
+Inlet region for Re = 200 with constant and parabolic inlet velocity.
+:::
+
+The difference is largest at the inlet, and then the two flows align towards the end of the inlet region.
+
+@fig-bs-200-reattachment shows the reattachment length for the two cases. 
+
+::: {#fig-bs-200-reattachment}
+
+![Constant inlet velocity](figures/backstep/Re200_const_reattachment_gray.png){#fig-bs-200-reattachment-const}
+
+![Parabolic inlet velocity](figures/backstep/Re200_par_reattachment_gray.png){#fig-bs-200-reattachment-par}
+
+Reattachment length for Re = 200 with constant and parabolic inlet velocity.
+:::
+
+## Parabolic inlet velocity
+
+We see that the case with contant inlet velocity has a slightly shorter reattachment length (approximately 7.8) than the case with parabolic inlet velocity (approximately 7.9).
+
+## Re=1000
+
+We now solve the backwards facing step problem for $Re = 1000$. We chose to use constant inlet velocity, as the difference between the two cases was not significant for the lower Reynolds number. We use the central differencing scheme. @fig-bs-1000-umag shows the velocity magnitude.
+
+![Velocity magnitude for Re = 1000, using the central differencing scheme](figures/backstep/Re1000_const_linear_umag_crop.png){#fig-bs-1000-umag}
+
+The solution is not stable, with the velocity having oscillations, and not converging to the steady state solution.
+
+To remedy this, we use the upwind scheme, which is a first order scheme. @fig-bs-1000-umag-upwind shows the velocity magnitude using the upwind scheme at t=400, when the solution has converged.
+
+![Velocity magnitude for Re = 1000, using the upwind scheme, at t=400](figures/backstep/Re1000_upwind_umag_crop.png){#fig-bs-1000-umag-upwind}
+
+We see that the recirculation region is much larger than for the lower Reynolds number.
+
+
+We zoom in on the recirculation region in @fig-bs-1000-recirculation.
+
+![Recirculation region for Re = 1000, using the upwind scheme, at t=400](figures/backstep/Re1000_upwind_recirculation.png){#fig-bs-1000-recirculation}
+
+We see that the recirculation region is much larger than for the lower Reynolds number, approximately 11.5.
+
+# Regularised 2D lid driven cavity
+
+## The icoFoam solver
+
+The icoFoam solver uses the PISO (Pressure Implicit with Splitting of Operators) algorithm to solve the incompressible Navier-Stokes equations. The algorithm starts by predicting the momentum:
+
+```c{.numberLines startLine=82}
+fvVectorMatrix UEqn
+(
+    fvm::ddt(U)
+    + fvm::div(phi, U)
+    - fvm::laplacian(nu, U)
+);
+
+if (piso.momentumPredictor())
+{
+    solve(UEqn == -fvc::grad(p));
+}
+```
+
+Then we enter the correction loop, where the flux (phi) is adjusted and the boundary conditions are updated:
+
+``` c
+volScalarField rAU(1.0/UEqn.A());
+volVectorField HbyA(constrainHbyA(rAU*UEqn.H(), U, p));
+surfaceScalarField phiHbyA
+(
+    "phiHbyA",
+    fvc::flux(HbyA)
+    + fvc::interpolate(rAU)*fvc::ddtCorr(U, phi)
+);
+
+adjustPhi(phiHbyA, U, p);
+
+// Update the pressure BCs to ensure flux consistency
+constrainPressure(p, U, phiHbyA, rAU);
+```
+
+Then the pressure is corrected. To account for potential non-orthogonality in the mesh, this is done a loop. At the last loop iteration the flux is updated.
+
+``` c
+while (piso.correctNonOrthogonal())
+{
+    // Pressure corrector
+
+    fvScalarMatrix pEqn
+    (
+        fvm::laplacian(rAU, p) == fvc::div(phiHbyA)
+    );
+
+    pEqn.setReference(pRefCell, pRefValue);
+
+    pEqn.solve();
+
+    if (piso.finalNonOrthogonalIter())
+    {
+        phi = phiHbyA - pEqn.flux();
+    }
+}
+```
+
+Finally, the velocity is corrected:
+
+``` c
+U = HbyA - rAU*fvc::grad(p);
+U.correctBoundaryConditions();
+```
+
+This whole procedure is then repeated until the solution converges. Then the solver can proceed to the next time step. And start the process again.
+
+In summary, the icoFoam uses the PISO alorithm that can be summarized as follows (from [@pisoalg], line numbers in the implementation file are added):
+
+1.  Set the boundary conditions.
+2.  Solve the discretized momentum equation to compute an intermediate velocity field. (line 82-85)
+3.  Compute the mass fluxes at the cells faces. (lines 93-99)
+4.  Solve the pressure equation. (line 116)
+5.  Correct the mass fluxes at the cell faces. (line 120)
+6.  Correct the velocities on the basis of the new pressure field. (line 126)
+7.  Update the boundary conditions. (line 127)
+8.  Repeat from 3 for the prescribed number of times. (`piso.correct()`-loop at line 88)
+9.  Increase the time step and repeat from 1.
+
+## Re=100 and Re=1000
+
+Here we use a 100x100 grid to solve the regularised lid driven cavity problem on the domain $\Omega = [-1,1]^2$. This means that to ensure a Courant number below 1, we need to use a time step of $\Delta t = C_0 \frac{\Delta x}{|U|} \leq  0.02$. We run the solver until convergence (by visual inspection), and plot the computed streamfunction. We use the upwind, QUICK, and central differencing schemes for Reynolds numbers $Re = 100$ and $Re = 1000$.
+
+@fig-LDC-Re100 shows the solution for $Re = 100$.
+
+:::::: {#fig-LDC-Re100}
+::::: grid
+::: g-col-6
+![](figures/ldc/Re100_m1_streamfunction_crop.png) Re = 100, upwind
+:::
+
+::: g-col-6
+![](figures/ldc/Re100_m2_streamfunction_crop.png) Re = 100, QUICK
+:::
+:::::
+
+Streamfunction for Re = 100 using the upwind and QUICK schemes.
+::::::
+
+We see that both methods produce visually identical solutions. That is not the case for the higher Reynolds number, as we see in @fig-LDC-Re1000.
+
+::::::: {#fig-LDC-Re1000}
+:::::: grid
+::: g-col-4
+![](figures/ldc/Re1000_m1_streamfunction_crop.png) Re = 1000, upwind
+:::
+
+::: g-col-4
+![](figures/ldc/Re1000_m2_streamfunction_crop.png) Re = 1000, QUICK
+:::
+
+::: g-col-4
+![](figures/ldc/Re1000_linear_streamfunction_crop.png) Re = 1000, central differencing
+:::
+::::::
+
+Streamfunction for Re = 1000 using the upwind, QUICK, and central differencing schemes.
+:::::::
+
+Here, we see an obious difference between the upwind scheme and the other methods. Towards the upper right corner, the shape of the dark blue area is distorted for the upwind scheme compared to the QUICK scheme and the central differencing scheme. This may be caused by the fact that the upwind scheme is a first order method that is prone to numerical diffusion, and that the QUICK and central differencing scheme, which are second order methods, are more accurate.
+
+## Re=250
+
+We now solve the lid driven cavity problem for $Re = 250$. We use the same grid and time step size previously. We use the central differencing scheme. @fig-LDC-Re250 shows the computed streamfunction. We use paraview to calculate the minima of the streamfunction, which is the center of the main vortex. The center has coordinates $(0.22, 0.32)$, and is marked with a dot in the figure.
+
+![Streamfunction for Re = 250. The center of the main vortex is marked with a dot.](figures/ldc/Re250_linear_stream_with_min_crop.png){#fig-LDC-Re250}
+
+## References
+
+::: {#refs}
+:::
+
+# Appendix
+
+## Code
+The code for this exercise is available at [github.com/kristianholme/MEK9470-mandatory-exercise-1](https://github.com/kristianholme/MEK9470).

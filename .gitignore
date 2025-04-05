@@ -11,3 +11,8 @@ dynamicCode/
 Allclean
 Allrun
 *.foam
+plot/
+plots/
+backwardFacingStep2D/
+*.html
+

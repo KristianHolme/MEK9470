@@ -20,7 +20,7 @@ struct Minmod <: AbstractLimiter end
 struct Superbee <: AbstractLimiter end
 struct Sweby <: AbstractLimiter 
     β::Float64
-    function Sweby(β::Float64=1.0)
+    function Sweby(β::Float64=1.5)
         return new(β)
     end
 end

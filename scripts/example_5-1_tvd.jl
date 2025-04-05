@@ -1,4 +1,5 @@
-using MEK9470
+using DrWatson
+@quickactivate :MEK9470
 using LinearAlgebra
 using CairoMakie
 using Logging
@@ -111,7 +112,8 @@ function error(ϕ, ϕ_exact, dx)
 end
 ##
 using Logging
-Discretization = TVD(Sweby())
+set_theme!(theme_latexfonts())
+Discretization = TVD(Sweby(1.5))
 # Discretization = TVD(UD())
 u = 1.0
 N = 10
@@ -130,12 +132,16 @@ display(fig)
 ϕ
 ##
 # Create plots for each case
-cases = ["i)", "i.2)", "ii)", "iii)"]
-us = [0.1, 0.1,  2.5, 2.5]
-Ns = [5, 8, 5, 90]
-
+cases = ["i)", "ii)", "iii)"]
+us = [0.1, 2.5, 2.5]
+Ns = [5, 5, 20]
+kwargs = (;xminorticks=IntervalsBetween(5), yminorticks=IntervalsBetween(5),
+          xminorgridvisible=true, yminorgridvisible=true,
+          xminorticksvisible=true, yminorticksvisible=true)
 fig = Figure(size=(800, 600))
-axes = [Axis(fig[i÷3+1, mod1(i, 2)], title = "Case $(cases[i]): u = $(us[i]), N = $(Ns[i])") for i in eachindex(cases)]
+axes = [Axis(fig[i÷3+1, mod1(i, 2)];
+            title = "Case $(cases[i]): u = $(us[i]), N = $(Ns[i])",
+            kwargs...) for i in eachindex(cases)]
 
 idxs = 2:8
 limiters = [UD(),
@@ -151,9 +157,10 @@ limiter_names = ["UD",
                  "VanAlbada",
                  "Minmod",
                  "Superbee",
-                 "Sweby",
+                 "Sweby(1.5)",
                  "UMIST",
                  "QUICK"][idxs]
+
 
 for (i, u) in enumerate(us)
     @debug "case $i"
@@ -169,10 +176,10 @@ for (i, u) in enumerate(us)
 end
 
 # Add a single legend for all plots
-fig[end+1,:] = Legend(fig, axes[1], "Methods", 
+fig[2,2] = Legend(fig, axes[1], "Methods", 
                 framevisible=false, merge=true, 
-                orientation=:horizontal, nbanks=2)
-Label(fig[0,:], "Example 5.1")
+                orientation=:horizontal, nbanks=3, tellheight=false, tellwidth=false)
+# Label(fig[0,:], "Example 5.1", fontsize=24)
 # Adjust layout
 for ax in axes
     ax.xlabel = "x"
@@ -182,16 +189,20 @@ end
 fig
 ## save figure
 save("plots/example_5-1_comparison.png", fig)
+save("report/figures/tvd_comparison.svg", fig)
 ## Error analysis
 us = [0.1, 2.5]
-Ns = 2 .^ (3:8)
+Ns = 2 .^ (2:12)
+xtickNs = 2:2:12
 fig = Figure(size=(800, 600))
-axes = [Axis(fig[1, i],
+
+axes = [Axis(fig[1, i];
             title = "u = $(us[i])",
             xscale=log2,
             yscale=log10,
             xlabel="N",
-            ylabel="L2 error") for i in eachindex(us)]
+            ylabel="L2 error",
+            kwargs...) for i in eachindex(us)]
 
 conv_lines=[]
 order_lines=[]
@@ -235,3 +246,4 @@ fig[1,end+1] = Legend(fig,
                     nbanks=1)
 display(fig)
 ##
+save("report/figures/tvd_convergence.svg", fig)
