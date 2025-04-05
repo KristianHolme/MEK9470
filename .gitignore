@@ -15,4 +15,5 @@ plot/
 plots/
 backwardFacingStep2D/
 *.html
+*.pdf
 
