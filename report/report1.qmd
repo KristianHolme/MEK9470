@@ -222,11 +222,11 @@ We see that both methods produce visually identical solutions. That is not the c
 
 ::::::: {#fig-LDC-Re1000 layout-ncol=3}
 
-![Re = 1000, upwind](figures/ldc/Re1000_m1_streamfunction_crop.png){#fig-LDC-Re1000-upwind}
+![upwind](figures/ldc/Re1000_m1_streamfunction_crop.png){#fig-LDC-Re1000-upwind}
 
-![Re = 1000, QUICK](figures/ldc/Re1000_m2_streamfunction_crop.png){#fig-LDC-Re1000-quick}
+![QUICK](figures/ldc/Re1000_m2_streamfunction_crop.png){#fig-LDC-Re1000-quick}
 
-![Re = 1000, central differencing](figures/ldc/Re1000_linear_streamfunction_crop.png){#fig-LDC-Re1000-linear}
+![central differencing](figures/ldc/Re1000_linear_streamfunction_crop.png){#fig-LDC-Re1000-linear}
 
 Streamfunction for Re = 1000 using the upwind, QUICK, and central differencing schemes.
 :::::::
