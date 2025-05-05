@@ -1,6 +1,12 @@
+module Discretizations
+
+export AbstractDiscretization, AbstractLimiter
+export CentralDiff, Upwind, Hybrid, QUICK, TVD
+export UD, VanLeer, VanAlbada, Minmod, Superbee, Sweby, UMIST, QUICKlimiter
+export apply_limiter
+
 abstract type AbstractDiscretization end
 abstract type AbstractLimiter end
-
 
 struct CentralDiff <: AbstractDiscretization end
 struct Upwind <: AbstractDiscretization end
@@ -12,6 +18,8 @@ struct TVD <: AbstractDiscretization
         return new(limiter)
     end
 end
+
+
 
 struct UD <: AbstractLimiter end
 struct VanLeer <: AbstractLimiter end
@@ -54,9 +62,11 @@ function apply_limiter(limiter::UMIST, r)
 end
 
 function apply_limiter(limiter::UD, r)
-    0.0
+    zero(r)
 end
 
 function apply_limiter(limiter::QUICKlimiter, r)
     max(0, min(2r, (3+r)/4, 2))
+end
+
 end
