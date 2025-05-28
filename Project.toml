@@ -1,4 +1,5 @@
 name = "MEK9470"
+uuid = "88ef72a2-3bbd-11f0-22a9-6bddeece12d5"
 authors = ["Kristian Holme"]
 version = "0.0.1"
 

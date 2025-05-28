@@ -16,104 +16,6 @@ function continuity_equation(u, v, mesh::CartesianMesh)
     return r
 end
 
-# Multiple dispatch for different boundary conditions
-abstract type BoundaryCondition end
-struct DirichletBC{T} <: BoundaryCondition
-    value::T
-end
-struct NeumannBC{T} <: BoundaryCondition
-    gradient::T
-end
-
-# Boundary side types for dispatch
-abstract type BoundarySide end
-struct North <: BoundarySide end
-struct South <: BoundarySide end
-struct East <: BoundarySide end
-struct West <: BoundarySide end
-
-# Comprehensive boundary condition specification for all sides
-struct DomainBoundaryConditions{T}
-    north::BoundaryCondition
-    south::BoundaryCondition
-    east::BoundaryCondition
-    west::BoundaryCondition
-
-    function DomainBoundaryConditions(north::BoundaryCondition, south::BoundaryCondition,
-        east::BoundaryCondition, west::BoundaryCondition)
-        return new{promote_type(typeof(north), typeof(south), typeof(east), typeof(west))}(
-            north, south, east, west)
-    end
-end
-
-# Convenience constructors for common cases
-function DomainBoundaryConditions(; north=DirichletBC(0.0), south=DirichletBC(0.0),
-    east=DirichletBC(0.0), west=DirichletBC(0.0))
-    return DomainBoundaryConditions(north, south, east, west)
-end
-
-# Lid-driven cavity boundary conditions for u-velocity
-function lid_driven_cavity_u_bc(lid_velocity=1.0)
-    return DomainBoundaryConditions(
-        north=DirichletBC(lid_velocity),  # Moving lid
-        south=DirichletBC(0.0),           # No-slip bottom
-        east=DirichletBC(0.0),            # No-slip right
-        west=DirichletBC(0.0)             # No-slip left
-    )
-end
-
-# Lid-driven cavity boundary conditions for v-velocity
-function lid_driven_cavity_v_bc()
-    return DomainBoundaryConditions(
-        north=DirichletBC(0.0),   # No penetration at lid
-        south=DirichletBC(0.0),   # No penetration at bottom
-        east=DirichletBC(0.0),    # No penetration at right
-        west=DirichletBC(0.0)     # No penetration at left
-    )
-end
-
-# Get boundary condition for specific side using dispatch
-get_bc(bc::DomainBoundaryConditions, ::North) = bc.north
-get_bc(bc::DomainBoundaryConditions, ::South) = bc.south
-get_bc(bc::DomainBoundaryConditions, ::East) = bc.east
-get_bc(bc::DomainBoundaryConditions, ::West) = bc.west
-
-# Determine which boundary side a cell is on
-function get_boundary_side(i, j, N)
-    if j == N
-        return North()
-    elseif j == 1
-        return South()
-    elseif i == N
-        return East()
-    elseif i == 1
-        return West()
-    else
-        return nothing  # Interior cell
-    end
-end
-
-# Face orientation types for dispatch
-abstract type FaceOrientation end
-struct Vertical <: FaceOrientation end
-struct Horizontal <: FaceOrientation end
-
-# Velocity component selection via dispatch
-face_velocity(u, v, ::Vertical) = u
-face_velocity(u, v, ::Horizontal) = v
-
-# Direction types for cleaner dispatch
-abstract type FlowDirection end
-struct Positive <: FlowDirection end
-struct Negative <: FlowDirection end
-
-flow_direction(velocity) = velocity ≥ 0 ? Positive() : Negative()
-
-# Upwind cell selection via dispatch
-upwind_cell(cell1, cell2, ::Positive) = cell1
-upwind_cell(cell1, cell2, ::Negative) = cell2
-downwind_cell(cell1, cell2, dir::FlowDirection) = upwind_cell(cell2, cell1, dir)
-
 """
 continuity in x direction(for u). Transpose for v in y-direction
 """
@@ -456,12 +358,10 @@ get_convection_operators(mesh, ϕ, u, v, limiter, bc)
 returns the convection operators for u and v using TVD scheme
 Supports different boundary conditions on different sides.
 """
-function get_convection_operators(mesh::CartesianMesh, ϕ, u, v, limiter::AbstractLimiter,
+function set_convection_operators!(M_u, M_v, mesh::CartesianMesh, ϕ, u, v, limiter::AbstractLimiter,
     bc::DomainBoundaryConditions=DomainBoundaryConditions())
     N = mesh.N
     dx = dy = 1 / N
-    M_u = spzeros(Float64, N^2, N^2)
-    M_v = spzeros(Float64, N^2, N^2)
 
     ϕ_f = compute_face_values(ϕ, mesh, u, v, limiter, bc)
 
@@ -471,8 +371,7 @@ function get_convection_operators(mesh::CartesianMesh, ϕ, u, v, limiter::Abstra
         # Process each direction using helper functions
         process_convection_direction!(M_u, M_v, ϕ_f, mesh, i, j, center, dx, dy)
     end
-
-    return M_u, M_v
+    nothing
 end
 
 function process_convection_direction!(M_u, M_v, ϕ_f, mesh, i, j, center, dx, dy)
