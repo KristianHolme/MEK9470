@@ -16,5 +16,5 @@ plots/
 backwardFacingStep2D/
 *.html
 *.pdf
-Manifest.toml
-
+/Manifest.toml
+.cursor/

@@ -1,3 +1,2 @@
-using Test
-
-include("test_laplacian.jl") 
+using TestItemRunner
+@run_package_tests
