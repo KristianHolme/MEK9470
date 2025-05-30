@@ -27,7 +27,7 @@ export get_bc, get_boundary_side, get_boundary_value
 # Face and flow types
 export FaceOrientation, Vertical, Horizontal
 export FlowDirection, Positive, Negative
-export upwind_cell, downwind_cell, flow_direction, face_velocity
+export upwind_cell, downwind_cell, flow_direction_sign, face_velocity
 
 
 # Discretizations submodule
@@ -37,7 +37,7 @@ include("Discretizations/Discretizations.jl")
 # Solver functionality
 include("LDCSolver/operators.jl")
 export set_convection_operators!, update_convection_operators!
-export laplacian, get_laplacian_operator, get_continuity_operator
+export laplacian, get_laplacian_operator, get_continuity_operator_x, get_continuity_operator_y
 export continuity_x, continuity_y, pressure_dx, pressure_dy
 export get_pressure_dx_operator, get_pressure_dy_operator
 export compute_face_values, compute_r_ratio, get_convection_operators
@@ -52,5 +52,8 @@ export LDCOperators, LinearOperator, ConvectionOperator
 
 include("LDCSolver/solver.jl")
 export construct_linear_system
+
+include("LDCPlotting/plotting.jl")
+export simple_uvp_plot, lid_driven_cavity_plot, plot_velocity_profiles, plot_streamfunction
 
 end

@@ -221,9 +221,21 @@ abstract type FlowDirection end
 struct Positive <: FlowDirection end
 struct Negative <: FlowDirection end
 
-flow_direction(velocity) = velocity ≥ 0 ? Positive() : Negative()
+# AD-compatible flow direction - use sign directly to avoid conditional type creation
+flow_direction_sign(velocity) = sign(velocity)
 
-# Upwind cell selection via dispatch
+# Upwind cell selection using velocity sign directly (AD-compatible)
+function upwind_cell(cell1, cell2, velocity)
+    # If velocity >= 0, upwind is cell1, otherwise cell2
+    return ifelse(velocity >= 0, cell1, cell2)
+end
+
+function downwind_cell(cell1, cell2, velocity)
+    # If velocity >= 0, downwind is cell2, otherwise cell1  
+    return ifelse(velocity >= 0, cell2, cell1)
+end
+
+# Keep the old dispatch-based methods for non-AD code paths
 upwind_cell(cell1, cell2, ::Positive) = cell1
 upwind_cell(cell1, cell2, ::Negative) = cell2
 downwind_cell(cell1, cell2, dir::FlowDirection) = upwind_cell(cell2, cell1, dir)
