@@ -4,8 +4,9 @@ using LinearAlgebra
 using LinearSolve
 using SparseArrays
 using CairoMakie
+using Dates
 ##
-mesh = CartesianMesh(8)
+mesh = CartesianMesh(32)
 
 conv = ConvectionOperator(mesh)
 uvp = 1:mesh.N^2*3 |> collect .|> Float64
@@ -21,22 +22,23 @@ M, b = construct_linear_system(ldcprob, uvp)
 linprob = LinearProblem(M, b)
 sol = solve(linprob)
 uvp = sol.u
-lid_driven_cavity_plot(sol.u, mesh, title="Converged Nonlinear Solution")
+lid_driven_cavity_plot(sol.u, mesh, title="Linear system solution")
 ##
 using NonlinearSolve
-mesh = CartesianMesh(64)
+mesh = CartesianMesh(32)
 ψ = VanLeer()
-ldcprob = LDCProblem(mesh, 1.0, ψ, 1.0)
+ldcprob = LDCProblem(mesh, 0.001, ψ, 1.0)
 function residuals(uvp, ldcprob)
     M, b = construct_linear_system(ldcprob, uvp)
     return M * uvp - b
 end
 
 # Test nonlinear solve with AD-compatible types
-uvp = zeros(mesh.N^2 * 3) .+ 0.01
+uvp = zeros(mesh.N^2 * 3) .+ 0.5
 nlprob = NonlinearProblem(residuals, uvp, ldcprob)
 sol = solve(nlprob)
-lid_driven_cavity_plot(sol.u, mesh, title="Converged Nonlinear Solution")
+fig = lid_driven_cavity_plot(sol.u, mesh, title="Converged Nonlinear Solution")
+save(plotsdir("64x64_solution_$(Dates.format(now(), "yyyy-mm-dd_HH-MM")).png"), fig)
 norm(residuals(sol.u, ldcprob))
 M, b = construct_linear_system(ldcprob, sol.u)
 norm(M)
