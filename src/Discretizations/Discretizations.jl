@@ -2,7 +2,7 @@ module Discretizations
 
 export AbstractDiscretization, AbstractLimiter
 export CentralDiff, Upwind, Hybrid, QUICK, TVD
-export UD, VanLeer, VanAlbada, Minmod, Superbee, Sweby, UMIST, QUICKlimiter
+export UD, CD, VanLeer, VanAlbada, Minmod, Superbee, Sweby, UMIST, QUICKlimiter
 export apply_limiter
 
 abstract type AbstractDiscretization end
@@ -22,6 +22,7 @@ end
 
 
 struct UD <: AbstractLimiter end
+struct CD <: AbstractLimiter end
 struct VanLeer <: AbstractLimiter end
 struct VanAlbada <: AbstractLimiter end
 struct Minmod <: AbstractLimiter end
@@ -69,6 +70,10 @@ end
 
 function (limiter::QUICKlimiter)(r::Real)
     max(0, min(2r, (3 + r) / 4, 2))
+end
+
+function (limiter::CD)(r::Real)
+    one(r)
 end
 
 end
