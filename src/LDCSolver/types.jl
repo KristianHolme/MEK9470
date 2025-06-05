@@ -17,34 +17,23 @@ struct ConvectionOperator{T} <: AbstractNonLinearOperator where T<:Number
     Muv::AbstractMatrix{T}
     Mvu::AbstractMatrix{T}
     Mvv::AbstractMatrix{T}
+    b_u_corrections::AbstractVector{T}
+    b_v_corrections::AbstractVector{T}
     function ConvectionOperator(mesh::CartesianMesh, ::Type{T}=Float64) where T<:Number
         Muu = spzeros(T, mesh.N^2, mesh.N^2)
         Muv = spzeros(T, mesh.N^2, mesh.N^2)
         Mvu = spzeros(T, mesh.N^2, mesh.N^2)
         Mvv = spzeros(T, mesh.N^2, mesh.N^2)
-        return new{T}(Muu, Muv, Mvu, Mvv)
+        b_u_corrections = zeros(T, mesh.N^2)
+        b_v_corrections = zeros(T, mesh.N^2)
+        return new{T}(Muu, Muv, Mvu, Mvv, b_u_corrections, b_v_corrections)
     end
 end
 function ConvectionOperator(mesh::CartesianMesh)
     return ConvectionOperator(mesh, Float64)
 end
 
-function update_convection_operators!(op::ConvectionOperator,
-    mesh::CartesianMesh,
-    uvp,
-    limiter::AbstractLimiter,
-    bc_u::DomainBoundaryConditions,
-    bc_v::DomainBoundaryConditions,
-)
-    any(isnan.(uvp)) && @warn "uvp contains nans"
-    N = mesh.N
-    @assert length(uvp) == 3(N^2)
-    u = @view uvp[1:N^2]
-    v = @view uvp[N^2+1:2N^2]
-    set_convection_operators!(op.Muu, op.Muv, mesh, u, u, v, limiter, bc_u)
-    set_convection_operators!(op.Mvu, op.Mvv, mesh, v, u, v, limiter, bc_v)
-    nothing
-end
+
 
 # Helper function to create ConvectionOperator with element type matching uvp
 function create_convection_operator(mesh::CartesianMesh, uvp::AbstractVector{T}) where T
@@ -61,6 +50,8 @@ struct LDCOperators{T<:Number}
     continuity_v::LinearOperator
     function LDCOperators(mesh::CartesianMesh, u_bc::DomainBoundaryConditions, v_bc::DomainBoundaryConditions, ::Type{T}=Float64) where T<:Number
         convection = ConvectionOperator(mesh, T)
+        # dx_pressure = LinearOperator(get_pressure_dx_operator(mesh)...)
+        # dy_pressure = LinearOperator(get_pressure_dy_operator(mesh)...)
         dx_pressure = LinearOperator(get_pressure_dx_operator(mesh)...)
         dy_pressure = LinearOperator(get_pressure_dy_operator(mesh)...)
         laplacian_u = LinearOperator(get_laplacian_operator(mesh, u_bc.north.value)...)

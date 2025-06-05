@@ -8,7 +8,7 @@ function split_uvp(uvp, mesh::CartesianMesh)
 end
 
 """
-continuity in x direction(for u). Transpose for v in y-direction
+continuity in x direction(for u).
 
 applying the divergence theorem, the continuity equation is requiring the sum of the fluxes out of each cell to be zero.
 
@@ -81,7 +81,7 @@ we have neumann bc on all sides, ∂p/∂x = 0
 we calculate this as te area of the cell (Δx * Δy) times the difference in pressure at the cell faces.
 
 the pressure gradient of the cell is computed as the average of the interpolated pressure at the east and west faces:
-∫∂p/∂x dx ≈ ΔxΔy(∂p/∂x|_e + ∂p/∂x |_w)/2 ≈ ΔxΔy( (p_E - p_P)/Δx + (p_P - p_W)/Δx)/2 ≈ ΔxΔy(p_E - p_W)/2Δx = Δy(p_E - p_W)/2
+∫∂p/∂x dxdy ≈ ΔxΔy(∂p/∂x|_e + ∂p/∂x |_w)/2 ≈ ΔxΔy( (p_E - p_P)/Δx + (p_P - p_W)/Δx)/2 ≈ ΔxΔy(p_E - p_W)/2Δx = Δy(p_E - p_W)/2
 
 on the boundaries, one of the terms is zero, so for the east side we get ΔxΔy( 0 + (p_P - p_W)/Δx)/2 = Δy(p_P - p_W)/2,
 and for the west side we get ΔxΔy( (p_E - p_P)/Δx + 0)/2 = Δy(p_E - p_P)/2
@@ -97,16 +97,16 @@ function get_pressure_dx_operator(mesh::CartesianMesh, type::Type{T}=Float64) wh
         west = i != 1 ? cartesian_to_linear_indices(i - 1, j, mesh) : nothing
         if i == 1
             M[center, east] = 1
-            M[center, center] -= 1
+            M[center, center] = -1
         elseif i == N
-            M[center, west] = -1
             M[center, center] = 1
+            M[center, west] = -1
         else
             M[center, east] = 1
             M[center, west] = -1
         end
     end
-    M .*= dx/2
+    M .*= dx / 2
     return M, b
 end
 
@@ -121,16 +121,16 @@ function get_pressure_dy_operator(mesh::CartesianMesh, type::Type{T}=Float64) wh
         south = j != 1 ? cartesian_to_linear_indices(i, j - 1, mesh) : nothing
         if j == 1
             M[center, north] = 1
-            M[center, center] -= 1
+            M[center, center] = -1
         elseif j == N
-            M[center, south] = -1
             M[center, center] = 1
+            M[center, south] = -1
         else
             M[center, north] = 1
             M[center, south] = -1
         end
     end
-    M .*= dy/2
+    M .*= dy / 2
     return M, b
 end
 
@@ -182,7 +182,9 @@ function get_laplacian_operator(mesh::CartesianMesh, topvalue::Number)
         elseif j == N
             M[center, south] = 1
             M[center, center] -= 3
-            b[center] = topvalue * -2
+            ccx, ccy = cell_center(i, j, mesh)
+            regular_topvalue = 16 * (1 - ccx)^2 * ccx^2 * topvalue
+            b[center] = regular_topvalue * 2
         else
             M[center, north] = 1
             M[center, center] -= 2
@@ -245,7 +247,7 @@ function compute_single_face_value(ϕ, mesh::CartesianMesh, u, v, limiter::Abstr
 
     # Compute r-ratio for the determined flow direction
     r = compute_r_ratio(ϕ, mesh, upwind_i, upwind_j, downwind_i, downwind_j, face_orient, bc)
-    
+
     # Compute TVD face value
     ϕ_face = ϕ_upwind + 0.5 * limiter(r) * (ϕ_downwind - ϕ_upwind)
 
@@ -273,7 +275,8 @@ function compute_r_ratio(ϕ, mesh::CartesianMesh, upwind_i, upwind_j, downwind_i
 
     # Compute r ratio with numerical stability
     denominator = ϕ_downwind - ϕ_upwind
-    r = (ϕ_upwind - ϕ_upwind_upwind) / (denominator+1e-8)
+    denominator = max(denominator, 1e-8)
+    r = (ϕ_upwind - ϕ_upwind_upwind) / denominator
     return r
 end
 
@@ -305,7 +308,7 @@ function get_upwind_upwind_value(ϕ, mesh, upwind_upwind_i, upwind_upwind_j,
         boundary_side = get_boundary_side(upwind_i, upwind_j, N)
         if boundary_side !== nothing
             specific_bc = get_bc(bc, boundary_side)
-            return get_boundary_value(ϕ, mesh, upwind_i, upwind_j, specific_bc)
+            return get_upwind_upwind_bc(ϕ, mesh, upwind_i, upwind_j, specific_bc)
         else
             # Interior cell (shouldn't happen in this context)
             return ϕ[cartesian_to_linear_indices(upwind_i, upwind_j, mesh)]
@@ -316,11 +319,21 @@ function get_upwind_upwind_value(ϕ, mesh, upwind_upwind_i, upwind_upwind_j,
 end
 
 # Helper function to get boundary value based on BC type
-function get_boundary_value(ϕ, mesh, i, j, bc::DirichletBC)
-    return bc.value
+function get_upwind_upwind_bc(ϕ, mesh, i, j, bc::DirichletBC)
+    #using ghost cell extrapolation
+    boundary_cell_value = ϕ[cartesian_to_linear_indices(i, j, mesh)]
+    if bc.value > 0.5
+        cxx, _ = cell_center(i, j, mesh)
+        regular_topvalue = 16 * (1 - cxx)^2 * cxx^2
+        bc_value = regular_topvalue
+    else
+        bc_value = bc.value
+    end
+    upwind_upwind_value = 2 * bc_value - boundary_cell_value
+    return upwind_upwind_value
 end
 
-function get_boundary_value(ϕ, mesh, i, j, bc::NeumannBC)
+function get_upwind_upwind_bc(ϕ, mesh, i, j, bc::NeumannBC)
     # Zero gradient extrapolation
     return ϕ[cartesian_to_linear_indices(i, j, mesh)]
 end
@@ -331,40 +344,59 @@ get_convection_operators(mesh, ϕ, u, v, limiter, bc)
 returns the convection operators for u and v using TVD scheme
 Supports different boundary conditions on different sides.
 """
-function set_convection_operators!(M_u, M_v, mesh::CartesianMesh, ϕ, u, v, limiter::AbstractLimiter,
+function set_convection_operators!(M_u, M_v, mesh::CartesianMesh, ϕ_f, u, v, limiter::AbstractLimiter,
     bc::DomainBoundaryConditions=DomainBoundaryConditions())
     N = mesh.N
     dx = dy = 1 / N
 
-    ϕ_f = compute_face_values(ϕ, mesh, u, v, limiter, bc)
+    Iu = Int[]
+    Ju = Int[]
+    Vu = Float64[]
+    Iv = Int[]
+    Jv = Int[]
+    Vv = Float64[]
+
 
     for i in 1:N, j in 1:N
-        center = cartesian_to_linear_indices(i, j, mesh)
-
         # Process each direction using helper functions
-        process_convection_direction!(M_u, M_v, ϕ_f, mesh, i, j, center, dx, dy)
+        process_convection_direction!(Iu, Ju, Vu, Iv, Jv, Vv, ϕ_f, mesh, i, j)
     end
+    M_u = sparse(Iu, Ju, Vu .* dx * 0.5, N^2, N^2)
+    M_v = sparse(Iv, Jv, Vv .* dy * 0.5, N^2, N^2)
+    # M_u .*= dx * 0.5
+    # M_v .*= dy * 0.5
     nothing
 end
 
-function process_convection_direction!(M_u, M_v, ϕ_f, mesh, i, j, center, dx, dy)
+function process_convection_direction!(Iu, Ju, Vu, Iv, Jv, Vv, ϕ_f, mesh, i, j)
     N = mesh.N
+    center = cartesian_to_linear_indices(i, j, mesh)
 
     # East/West faces for u-momentum
+    center_value_u = 0.0
+    center_value_v = 0.0
     if i < N
         east_face_idx = get_face_index(mesh, i, j, :east)
         east_neighbor = cartesian_to_linear_indices(i + 1, j, mesh)
         ϕ_e = ϕ_f[east_face_idx]
-        M_u[center, east_neighbor] += ϕ_e * dx / 2
-        M_u[center, center] += ϕ_e * dx / 2
+        # M_u[center, east_neighbor] += ϕ_e
+        # M_u[center, center] += ϕ_e
+        push!(Iu, center)
+        push!(Ju, east_neighbor)
+        push!(Vu, ϕ_e)
+        center_value_u += ϕ_e
     end
 
     if i > 1
         west_face_idx = get_face_index(mesh, i, j, :west)
         west_neighbor = cartesian_to_linear_indices(i - 1, j, mesh)
         ϕ_w = ϕ_f[west_face_idx]
-        M_u[center, west_neighbor] -= ϕ_w * dx / 2
-        M_u[center, center] -= ϕ_w * dx / 2
+        # M_u[center, west_neighbor] -= ϕ_w
+        # M_u[center, center] -= ϕ_w
+        push!(Iu, center)
+        push!(Ju, west_neighbor)
+        push!(Vu, -ϕ_w)
+        center_value_u -= ϕ_w
     end
 
     # North/South faces for v-momentum
@@ -372,15 +404,164 @@ function process_convection_direction!(M_u, M_v, ϕ_f, mesh, i, j, center, dx, d
         north_face_idx = get_face_index(mesh, i, j, :north)
         north_neighbor = cartesian_to_linear_indices(i, j + 1, mesh)
         ϕ_n = ϕ_f[north_face_idx]
-        M_v[center, north_neighbor] += ϕ_n * dy / 2
-        M_v[center, center] += ϕ_n * dy / 2
+        # M_v[center, north_neighbor] += ϕ_n
+        # M_v[center, center] += ϕ_n
+        push!(Iv, center)
+        push!(Jv, north_neighbor)
+        push!(Vv, ϕ_n)
+        center_value_v += ϕ_n
     end
 
     if j > 1
         south_face_idx = get_face_index(mesh, i, j, :south)
         south_neighbor = cartesian_to_linear_indices(i, j - 1, mesh)
         ϕ_s = ϕ_f[south_face_idx]
-        M_v[center, south_neighbor] -= ϕ_s * dy / 2
-        M_v[center, center] -= ϕ_s * dy / 2
+        # M_v[center, south_neighbor] -= ϕ_s
+        # M_v[center, center] -= ϕ_s
+        push!(Iv, center)
+        push!(Jv, south_neighbor)
+        push!(Vv, -ϕ_s)
+        center_value_v -= ϕ_s
     end
+    push!(Iu, center)
+    push!(Ju, center)
+    push!(Vu, center_value_u)
+    push!(Iv, center)
+    push!(Jv, center)
+    push!(Vv, center_value_v)
+    nothing
+end
+
+function get_convection_correction_values(mwi_face_corrections, ϕu_f, ϕv_f, mesh::CartesianMesh)
+    N = mesh.N
+    b_u_corrections = zeros(eltype(mwi_face_corrections), N^2)
+    b_v_corrections = zeros(eltype(mwi_face_corrections), N^2)
+    set_convection_corrections!(b_u_corrections, ϕu_f, mwi_face_corrections, mesh)
+    set_convection_corrections!(b_v_corrections, ϕv_f, mwi_face_corrections, mesh)
+    return b_u_corrections, b_v_corrections
+end
+
+function set_convection_corrections!(b_corrections, ϕ_f, mwi_face_corrections, mesh::CartesianMesh)
+    N = mesh.N
+    dx = dy = 1 / N
+    for i in 1:N, j in 1:N
+        center = cartesian_to_linear_indices(i, j, mesh)
+
+        # East/West faces for u-momentum
+        if i < N
+            east_face_idx = get_face_index(mesh, i, j, :east)
+            east_neighbor = cartesian_to_linear_indices(i + 1, j, mesh)
+            ϕ_e = ϕ_f[east_face_idx]
+            b_corrections[center] += ϕ_e * dx * mwi_face_corrections[east_face_idx]
+        end
+
+        if i > 1
+            west_face_idx = get_face_index(mesh, i, j, :west)
+            west_neighbor = cartesian_to_linear_indices(i - 1, j, mesh)
+            ϕ_w = ϕ_f[west_face_idx]
+            b_corrections[center] -= ϕ_w * dx * mwi_face_corrections[west_face_idx]
+        end
+
+        # North/South faces for v-momentum
+        if j < N
+            north_face_idx = get_face_index(mesh, i, j, :north)
+            north_neighbor = cartesian_to_linear_indices(i, j + 1, mesh)
+            ϕ_n = ϕ_f[north_face_idx]
+            b_corrections[center] += ϕ_n * dy * mwi_face_corrections[north_face_idx]
+        end
+
+        if j > 1
+            south_face_idx = get_face_index(mesh, i, j, :south)
+            south_neighbor = cartesian_to_linear_indices(i, j - 1, mesh)
+            ϕ_s = ϕ_f[south_face_idx]
+            b_corrections[center] -= ϕ_s * dy * mwi_face_corrections[south_face_idx]
+        end
+    end
+end
+"""
+get the Rhie & Chow correction values for each face.
+
+U_f = ̄U_f - ̄d_f(∂p/∂x|_f i \bar{∂p/∂x}|_f)
+
+this function returns d_f(∂p/∂x|_f i \bar{∂p/∂x}|_f) for each face (derivative in y direction for horizontal faces, x direction for vertical faces)
+"""
+function get_face_correction_values(mesh::CartesianMesh, uvp::AbstractVector, momentum_u, momentum_v, p_dx, p_dy)
+    N = mesh.N
+    dx = dy = 1 / N
+    u, v, p = split_uvp(uvp, mesh)
+    total_faces = get_total_faces(mesh)
+    corrections = zeros(eltype(uvp), total_faces)
+
+    # Pressure gradients (multiplied by cell volume)
+    pressure_gradient_x = p_dx * p
+    pressure_gradient_y = p_dy * p
+
+    for f in 1:total_faces
+        i1, j1, i2, j2, orientation = face_neighbors(mesh, f)
+        neighbor1 = cartesian_to_linear_indices(i1, j1, mesh)
+        neighbor2 = cartesian_to_linear_indices(i2, j2, mesh)
+        # face gradient (P_F - P_P) / dx multiplied by volume (dx^2)
+        dp_f = (p[neighbor2] - p[neighbor1]) * dx
+        if orientation == :Vertical
+            # flux is in the x direction
+            a_P = momentum_u[neighbor1, neighbor1]
+            a_F = momentum_u[neighbor2, neighbor2]
+            dp_f_1 = pressure_gradient_x[neighbor1]
+            dp_f_2 = pressure_gradient_x[neighbor2]
+        else
+            # flux is in the y direction
+            a_P = momentum_v[neighbor1, neighbor1]
+            a_F = momentum_v[neighbor2, neighbor2]
+            dp_f_1 = pressure_gradient_y[neighbor1]
+            dp_f_2 = pressure_gradient_y[neighbor2]
+        end
+        dP = 1 / a_P
+        dF = 1 / a_F
+        df = 0.5 * (dP + dF)
+        dp_f_interp = (dp_f_1 + dp_f_2) * 0.5
+        # a_f = (a_P + a_F) / 2
+
+        # df = 1 / a_f
+        correction = df * (dp_f - dp_f_interp)
+        corrections[f] = correction
+    end
+    return corrections
+end
+
+
+
+function get_continuity_correction_values(mesh::CartesianMesh, uvp, Muu, Mvv, p_dx, p_dy)
+    face_corrections = get_face_correction_values(mesh, uvp, Muu, Mvv, p_dx, p_dy)
+    return get_continuity_correction_values(face_corrections, mesh)
+end
+
+function get_continuity_correction_values(face_corrections, mesh::CartesianMesh)
+    N = mesh.N
+    dx = dy = 1 / N
+    b = zeros(eltype(face_corrections), mesh.N^2)
+    # any(isnan.(face_corrections)) && @warn "face_corrections contains nans"
+    for i in 1:mesh.N, j in 1:mesh.N
+        center = cartesian_to_linear_indices(i, j, mesh)
+        north_face_idx = j != N ? get_face_index(mesh, i, j, :north) : nothing
+        south_face_idx = j != 1 ? get_face_index(mesh, i, j, :south) : nothing
+        east_face_idx = i != N ? get_face_index(mesh, i, j, :east) : nothing
+        west_face_idx = i != 1 ? get_face_index(mesh, i, j, :west) : nothing
+        if i == 1
+            b[center] += face_corrections[east_face_idx]
+        elseif i == mesh.N
+            b[center] -= face_corrections[west_face_idx]
+        else
+            b[center] += face_corrections[east_face_idx] - face_corrections[west_face_idx]
+        end
+        if j == 1
+            b[center] += face_corrections[north_face_idx]
+        elseif j == mesh.N
+            b[center] -= face_corrections[south_face_idx]
+        else
+            b[center] += face_corrections[north_face_idx] - face_corrections[south_face_idx]
+        end
+    end
+    # Corrected scaling: multiply by face area (dx for the face normal to flux direction)
+    b .*= dx
+    return b
 end

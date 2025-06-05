@@ -239,3 +239,4 @@ end
 upwind_cell(cell1, cell2, ::Positive) = cell1
 upwind_cell(cell1, cell2, ::Negative) = cell2
 downwind_cell(cell1, cell2, dir::FlowDirection) = upwind_cell(cell2, cell1, dir)
+
