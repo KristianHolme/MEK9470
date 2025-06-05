@@ -21,8 +21,8 @@ Create a comprehensive plot of the lid driven cavity solution showing:
 - Pressure field in separate subplot
 """
 function lid_driven_cavity_plot(uvp::AbstractVector, mesh::CartesianMesh;
-    title="Lid Driven Cavity", show_streamlines=true,
-    figsize=(800, 400))
+    title="Lid Driven Cavity", velocity_contours=true,
+    figsize=(800, 800), pressure_lims=nothing, xlims=nothing, ylims=nothing)
     u, v, p = split_uvp(uvp, mesh)
     N = mesh.N
 
@@ -44,7 +44,7 @@ function lid_driven_cavity_plot(uvp::AbstractVector, mesh::CartesianMesh;
     ax1 = Axis(fig[1, 1],
         title="Velocity Field",
         xlabel="x", ylabel="y",
-        aspect=DataAspect())
+        aspect=DataAspect(), limits=(xlims, ylims))
 
     # Background: velocity magnitude
     hm1 = heatmap!(ax1, x, y, vel_mag, colormap=:viridis)
@@ -57,7 +57,7 @@ function lid_driven_cavity_plot(uvp::AbstractVector, mesh::CartesianMesh;
         arrowsize=10, lengthscale=0.3, color=:white, linewidth=1.5)
 
     # Optional streamlines
-    if show_streamlines
+    if velocity_contours
         contour!(ax1, x, y, vel_mag, levels=10, color=:white, alpha=0.6, linewidth=0.8)
     end
 
@@ -65,20 +65,46 @@ function lid_driven_cavity_plot(uvp::AbstractVector, mesh::CartesianMesh;
     ax2 = Axis(fig[1, 3],
         title="Pressure Field",
         xlabel="x", ylabel="y",
-        aspect=DataAspect())
+        aspect=DataAspect(), limits=(xlims, ylims))
 
-    hm2 = heatmap!(ax2, x, y, P, colormap=:viridis)
+    if pressure_lims === nothing
+        hm2 = heatmap!(ax2, x, y, P, colormap=:viridis)
+    else
+        hm2 = heatmap!(ax2, x, y, P, colormap=:viridis, colorrange=pressure_lims)
+    end
     Colorbar(fig[1, 4], hm2, label="Pressure")
 
-    # Add cavity boundary visualization
-    for ax in [ax1, ax2]
-        # Draw cavity walls
-        lines!(ax, [0, 1, 1, 0, 0], [0, 0, 1, 1, 0], color=:black, linewidth=3)
-        # Highlight moving lid
-        lines!(ax, [0, 1], [1, 1], color=:red, linewidth=4)
-        xlims!(ax, 0, 1)
-        ylims!(ax, 0, 1)
-    end
+    # Streamfunction plot
+    ψ = compute_streamfunction(uvp, mesh)
+    Ψ = reshape(ψ, N, N)
+    ax3 = Axis(fig[2, 1], title="Streamfunction ψ", xlabel="x", ylabel="y", aspect=DataAspect())
+    # psi_plot = contourf!(ax3, x, y, Ψ, levels=20, colormap=:balance)
+    psi_plot = heatmap!(ax3, x, y, Ψ, colormap=:viridis)
+    contour!(ax3, x, y, Ψ, levels=[0.0, -10, -200, -500, -1000, -1300], color=:black, linewidth=1)
+    # arrows!(ax3, x[1:skip:end], y[1:skip:end],
+    #     U[1:skip:end, 1:skip:end], V[1:skip:end, 1:skip:end],
+    #     arrowsize=10, lengthscale=0.3, color=:red, linewidth=1.5)
+    Colorbar(fig[2, 2], psi_plot, label="ψ")
+
+    # Vorticity plot
+    ω = compute_vorticity(uvp, mesh)
+    Ω = reshape(ω, N, N)
+    ax4 = Axis(fig[2, 3], title="Vorticity ω", xlabel="x", ylabel="y", aspect=DataAspect())
+    omega_plot = contourf!(ax4, x, y, Ω, levels=20, colormap=:viridis)
+    # omega_plot = heatmap!(ax4, x, y, Ω, colormap=:viridis)
+
+    contour!(ax4, x, y, Ω, levels=10, color=:black, linewidth=1)
+    Colorbar(fig[2, 4], omega_plot, label="ω")
+
+    # # Add cavity boundary visualization
+    # for ax in [ax1, ax2]
+    #     # Draw cavity walls
+    #     lines!(ax, [0, 1, 1, 0, 0], [0, 0, 1, 1, 0], color=:black, linewidth=3)
+    #     # Highlight moving lid
+    #     lines!(ax, [0, 1], [1, 1], color=:red, linewidth=4)
+    #     xlims!(ax, 0, 1)
+    #     ylims!(ax, 0, 1)
+    # end
 
     Label(fig[0, :], title, fontsize=16, font="bold")
 
@@ -133,44 +159,31 @@ function plot_velocity_profiles(uvp::AbstractVector, mesh::CartesianMesh;
 end
 
 """
-    plot_streamfunction(uvp, mesh)
+    plot_streamfunction(uvp, mesh; method=:simpson, levels=20)
 
-Compute and plot the streamfunction for the lid driven cavity.
-The streamfunction ψ satisfies: ∂ψ/∂y = u, ∂ψ/∂x = -v
+Compute and plot the streamfunction for the lid driven cavity using advanced integration methods.
+The streamfunction ψ satisfies: ∂ψ/∂x = v, ∂ψ/∂y = -u
 """
-function plot_streamfunction(uvp::AbstractVector, mesh::CartesianMesh)
-    u, v, p = split_uvp(uvp, mesh)
+function plot_streamfunction(uvp::AbstractVector, mesh::CartesianMesh; method::Symbol=:simpson, levels::Int=20)
     N = mesh.N
 
     # Create coordinate grids at cell centers
     x = LinRange(0 + 1 / (2 * N), 1 - 1 / (2 * N), N)
     y = LinRange(0 + 1 / (2 * N), 1 - 1 / (2 * N), N)
 
-    U = reshape(u, N, N)
-    V = reshape(v, N, N)
-
-    # Compute streamfunction by integrating velocity field
-    # ψ = ∫u dy (integrating along y direction)
-    dx = x[2] - x[1]
-    dy = y[2] - y[1]
-
-    ψ = zeros(N, N)
-    # Integrate u in y-direction  
-    for i in 1:N
-        for j in 2:N
-            ψ[i, j] = ψ[i, j-1] + U[i, j-1] * dy
-        end
-    end
+    # Use the improved streamfunction computation
+    ψ_vec = compute_streamfunction(uvp, mesh; method=method)
+    ψ = reshape(ψ_vec, mesh)
 
     fig = Figure(size=(600, 500))
     ax = Axis(fig[1, 1],
-        title="Streamfunction",
+        title="Streamfunction ($(string(method)) integration)",
         xlabel="x", ylabel="y",
         aspect=DataAspect())
 
     # Plot streamlines
-    contour!(ax, x, y, ψ', levels=20, color=:black)
-    contourf!(ax, x, y, ψ', levels=20, colormap=:RdBu_r)
+    contour!(ax, x, y, ψ', levels=levels, color=:black, linewidth=1.5)
+    contourf!(ax, x, y, ψ', levels=levels, colormap=:viridis)
 
     # Add cavity boundary
     lines!(ax, [0, 1, 1, 0, 0], [0, 0, 1, 1, 0], color=:black, linewidth=3)
@@ -180,6 +193,52 @@ function plot_streamfunction(uvp::AbstractVector, mesh::CartesianMesh)
     ylims!(ax, 0, 1)
 
     Colorbar(fig[1, 2], label="Streamfunction ψ")
+
+    return fig
+end
+
+"""
+    plot_flow_analysis(uvp, mesh; method=:simpson)
+
+Create a comprehensive flow analysis plot showing streamfunction, velocity potential, 
+and vorticity fields.
+"""
+function plot_flow_analysis(uvp::AbstractVector, mesh::CartesianMesh;)
+    N = mesh.N
+
+    # Create coordinate grids
+    x = LinRange(0 + 1 / (2 * N), 1 - 1 / (2 * N), N)
+    y = LinRange(0 + 1 / (2 * N), 1 - 1 / (2 * N), N)
+
+    # Compute flow functions
+    ψ_vec = compute_streamfunction(uvp, mesh)
+    ω_vec = compute_vorticity(uvp, mesh)
+
+    # Reshape for plotting
+    Ψ = reshape(ψ_vec, N, N)
+    Ω = reshape(ω_vec, N, N)
+
+    fig = Figure(size=(1200, 400))
+
+    # Streamfunction plot
+    ax1 = Axis(fig[1, 1], title="Streamfunction ψ", xlabel="x", ylabel="y", aspect=DataAspect())
+    contourf!(ax1, x, y, Ψ, levels=20, colormap=:viridis)
+    contour!(ax1, x, y, Ψ, levels=15, color=:black, linewidth=1)
+    lines!(ax1, [0, 1, 1, 0, 0], [0, 0, 1, 1, 0], color=:black, linewidth=2)
+    Colorbar(fig[1, 2], label="ψ")
+
+    # Vorticity plot
+    ax3 = Axis(fig[1, 5], title="Vorticity ω", xlabel="x", ylabel="y", aspect=DataAspect())
+    ω_max = maximum(abs.(Ω))
+    contourf!(ax3, x, y, Ω, levels=20, colormap=:viridis)
+    contour!(ax3, x, y, Ω, levels=10, color=:black, linewidth=1)
+    lines!(ax3, [0, 1, 1, 0, 0], [0, 0, 1, 1, 0], color=:black, linewidth=2)
+    Colorbar(fig[1, 6], label="ω")
+
+    for ax in [ax1, ax2, ax3]
+        xlims!(ax, 0, 1)
+        ylims!(ax, 0, 1)
+    end
 
     return fig
 end

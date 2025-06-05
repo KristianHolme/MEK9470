@@ -9,6 +9,10 @@ using NonlinearSolve
 using DifferentialEquations
 using LoopVectorization
 using LinearSolve
+using JLD2
+using Dates
+using SparseConnectivityTracer, ADTypes
+using NonlinearSolve.NonlinearSolveBase: RelNormSafeBestTerminationMode
 
 # Basic tools and utilities
 export create_1D_grid
@@ -51,9 +55,17 @@ export LDCOperators, LinearOperator, ConvectionOperator
 
 
 include("LDCSolver/solver.jl")
-export construct_linear_system
+export construct_linear_system, residuals
 
 include("LDCPlotting/plotting.jl")
-export simple_uvp_plot, lid_driven_cavity_plot, plot_velocity_profiles, plot_streamfunction
+export simple_uvp_plot, lid_driven_cavity_plot, plot_velocity_profiles, plot_streamfunction, plot_flow_analysis
+
+# Flow analysis utilities
+include("LDCUtils.jl/flow_functions.jl")
+export cumsimp, compute_streamfunction, compute_velocity_potential, compute_flow_functions
+export compute_circulation, compute_vorticity, verify_flow_relations, compute_stream
+
+include("LDCUtils.jl/solving_utils.jl")
+export compute_next_re, solve_up
 
 end
