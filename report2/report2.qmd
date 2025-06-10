@@ -1,0 +1,343 @@
+---
+title: "A coupled collocated steady-state fully-implicit incompressible Navier-Stokes solver for the Regularized Lid Driven Cavity"
+author: "Kristian Holme"
+date: June 11 2025
+include-in-header:
+  - text: |
+      <style>
+      #title-slide .title {
+        font-size: 1.5em;
+        color:rgb(0, 0, 0);
+      }
+      </style>
+format:
+  revealjs:
+    theme: default
+    slide-number: false    
+    navigation-mode: vertical
+    footer: "MEK9470 Project Report"
+    incremental: false
+    transition: slide
+    background-transition: fade
+    transition-speed: fast
+    code-fold: true
+    highlight-style: github
+    scrollable: false
+    smaller: true
+    preview-links: auto
+    overview: true
+    touch: true
+    controls: true
+    controls-layout: bottom-right
+    progress: true
+    menu: true
+    echo: false
+    slide-level: 2
+editor: 
+    render-on-save: true
+bibliography: references.bib
+citeproc: true
+---
+## Regularized Lid Driven Cavity
+
+:::: {.columns}
+
+::: {.column width="50%"}
+- Incompressible Navier-Stokes 
+    - $\partial_t \mathbf{u} + \mathbf{u} \cdot \nabla \mathbf{u} = -\nabla p + \nu \nabla^2 \mathbf{u}$
+    - $\nabla \cdot \mathbf{u} = 0$
+- Collocated variables
+- Flux limiters
+- Fully implicit
+- Cartesian grid
+- No-slip boundary conditions for $\mathbf{u}$
+- $\frac{\partial p}{\partial x}|_{\partial \Omega} =0$ 
+:::
+
+::: {.column width="50%"}
+![](plots/regularize_profile.svg){width=60%}
+
+![](plots/Re1000Lee.png){width=60%}
+:::
+
+::::
+
+:::aside
+Picture from @leeRLDC
+:::
+
+## Discretization
+- Finite volume
+- $\mathbf{u} = (u, v)$
+
+\begin{equation*}
+\mathbf{u} \cdot \nabla \mathbf{u} +\nabla p - \nu \Delta \mathbf{u} = 0 \\
+\nabla \cdot \mathbf{u} = 0\\
+
+\downarrow \\
+
+\nabla \cdot (u \mathbf{u}) + \frac{\partial p}{\partial x} - \nu \Delta u = 0 \\
+\nabla \cdot (v \mathbf{u}) + \frac{\partial p}{\partial y} - \nu \Delta v = 0 \\
+\nabla \cdot \mathbf{u} = 0
+\end{equation*}
+
+## Discretization
+:::: {.columns}
+::: {.column width="50%"}
+\begin{equation*}
+\nabla \cdot (u \mathbf{u}) + \frac{\partial p}{\partial x} - \nu \Delta u = 0 \\
+\downarrow \\
+\int_{\Omega} \nabla \cdot (u \mathbf{u}) d\Omega + \int_{\Omega} \frac{\partial p}{\partial x} d\Omega - \nu \int_{\Omega} \Delta u d\Omega = 0 \\
+\downarrow \\
+\int_{\partial \Omega} (u \mathbf{u}) \cdot \mathbf{n} d\Gamma + \int_{\Omega} \frac{\partial p}{\partial x} d\Omega - \nu \int_{\Omega} \Delta u d\Omega = 0 \\
+\end{equation*}
+:::
+
+::: {.column width="50%"}
+\begin{equation*}
+\nabla \cdot \mathbf{u} = 0 \\
+\downarrow \\
+\int_{\Omega} \nabla \cdot \mathbf{u} d\Omega = 0 \\
+\downarrow \\
+\int_{\partial \Omega} \mathbf{u} \cdot \mathbf{n} d\Gamma = 0 \\
+\downarrow \\
+A(u_e - u_w + u_n - u_s)
+\end{equation*}
+:::
+
+::::
+
+:::aside
+$A$ is the face areas/lengths.
+:::
+
+## Discretization
+
+\begin{equation*}
+\int_{\partial \Omega} (\phi \mathbf{u}) \cdot \mathbf{n} d\Gamma = \\
+\sum_{f} \phi_f \mathbf{u}_f \cdot \mathbf{n}_f =  \\
+A(\phi_e u_e - \phi_w u_w + \phi_n u_n - \phi_s u_s), \quad \text{where} \quad \mathbf{u}_f = \frac{\mathbf{u}_P + \mathbf{u}_F}{2}
+\end{equation*}
+
+## Discretization: Flux limiters
+\begin{equation*}
+\phi_f = \phi_f^{up} + \frac{1}{2} \psi (r) \left( \phi_f^{down} - \phi_f^{up} \right), \quad 
+r = \frac{\phi_f^{up} - \phi_f^{upup}}{\phi_f^{down} - \phi_f^{up}}
+\end{equation*}
+
+![](plots/limiter_functions.svg){width=70%}
+
+
+## Assembly (vector notation)
+\begin{equation*}
+\int_{\partial \Omega} (\phi \mathbf{u}) \cdot \mathbf{n} d\Gamma \ \rightarrow A(\phi_e u_e - \phi_w u_w + \phi_n u_n - \phi_s u_s) 
+\rightarrow
+M_{u}(\phi) \mathbf{u} + M_{v}(\phi) \mathbf{v} \\
+
+\int_{\Omega} \frac{\partial p}{\partial x} d\Omega \rightarrow
+D_x \mathbf{p} \\
+
+\int_{\Omega} \frac{\partial p}{\partial y} d\Omega \rightarrow
+D_y \mathbf{p} \\
+
+\int_{\Omega} \Delta u d\Omega \rightarrow
+L \mathbf{u} + \mathbf{b}_{Lu} \\
+
+\int_{\Omega} \Delta v d\Omega \rightarrow
+L \mathbf{v} \\
+
+\int_{\Omega} \nabla \cdot \mathbf{u} d\Omega = 0 \rightarrow
+\int_{\partial \Omega} \mathbf{u} \cdot \mathbf{n} d\Gamma = 0 \rightarrow
+A(u_e - u_w + u_n - u_s) \rightarrow
+C_u \mathbf{u} + C_v \mathbf{v} \\
+
+\end{equation*}
+
+## Assembly
+\begin{equation*}
+\begin{bmatrix}
+M_{u}(u) - \nu L & M_{v}(u) & D_x\\
+M_{u}(v) & M_{v}(v) - \nu L & D_y\\
+C_u & C_v & 0
+\end{bmatrix}
+\begin{bmatrix}
+\mathbf{u} \\
+\mathbf{v} \\
+\mathbf{p}
+\end{bmatrix}
+=
+\begin{bmatrix}
+-\mathbf{b}_{Lu} \\
+\mathbf{0} \\
+\mathbf{0}
+\end{bmatrix}
+\end{equation*}
+
+- Pressure reference level: $p_1 = 0$
+
+## Solution
+\begin{equation*}
+\begin{bmatrix}
+M_{u}(u) - \nu L & M_{v}(u) & D_x\\
+M_{u}(v) & M_{v}(v) - \nu L & D_y\\
+C_u & C_v & 0
+\end{bmatrix}
+\begin{bmatrix}
+\mathbf{u} \\
+\mathbf{v} \\
+\mathbf{p}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\mathbf{b}_{Lu} \\
+\mathbf{0} \\
+\mathbf{0}
+\end{bmatrix}
+\end{equation*}
+
+```julia
+cmesh = CartesianMesh(N)
+uvp = zeros(cmesh.N^2 * 3) .+ 0.5
+Re = 1500
+ν = 1 / Re
+ψ = Sweby(1.5)
+ldcprob = LDCProblem(cmesh, ν, ψ)
+
+function residuals(uvp, ldcprob)
+    M, b = construct_linear_system(ldcprob, uvp)
+    return M * uvp - b
+end
+jac_sparsity = ADTypes.jacobian_sparsity(u -> residuals(u, ldcprob), uvp, TracerLocalSparsityDetector())
+
+ff = NonlinearFunction(residuals; jac_prototype=jac_sparsity)
+tol = 1e-4
+nlprob_sparse = NonlinearProblem(ff, uvp, ldcprob; abstol=tol, reltol=tol,
+ termination_condition=RelNormSafeBestTerminationMode(norm))
+sol = solve(nlprob_sparse, NewtonRaphson());
+```
+::: {.notes}
+Using the `NonlinearSolve.jl`
+:::
+## Result?
+![](plots/checkerboard.png)
+
+## Momentum weighted interpolation
+\begin{equation*}
+a_P u_{j,P} + \sum_{f} a_f u_{j,f} = -\frac{\partial p}{\partial x_j}\bigg|_P V_P \\
+\dots \\
+u_{j,f} = \bar{u}_{j,f} - \left(d_f \frac{\partial p}{\partial x_j} - \overline{d\frac{\partial p}{\partial x_j}}\bigg|_f\right)
+, \\
+\text{where}\quad d_P = \frac{V_P}{a_P}, \quad d_f = \frac{d_P + d_F}{2}, \quad
+\text{and} \quad \bar{u}_{j,f} = \frac{u_{j,P} + u_{j,F}}{2}
+
+\end{equation*}
+
+
+:::aside
+@MWI
+:::
+
+## Assembly (again)
+\begin{equation*}
+A(\phi_e u_e - \phi_w u_w + \phi_n u_n - \phi_s u_s) 
+\rightarrow
+M_{u}(\phi) \mathbf{u} + M_{v}(\phi) \mathbf{v} \color{red}{- \mathbf{b}_{M\phi}} \\
+
+\int_{\Omega} \frac{\partial p}{\partial x} d\Omega \rightarrow
+D_x \mathbf{p} \\
+
+\int_{\Omega} \frac{\partial p}{\partial y} d\Omega \rightarrow
+D_y \mathbf{p} \\
+
+\int_{\Omega} \Delta u d\Omega \rightarrow
+L \mathbf{u} + \mathbf{b}_{Lu} \\
+
+\int_{\Omega} \Delta v d\Omega \rightarrow
+L \mathbf{v} \\
+
+\int_{\Omega} \nabla \cdot \mathbf{u} d\Omega \rightarrow
+C_u \mathbf{u} + C_v \mathbf{v} \color{red}{- \mathbf{b}_{C}} \\
+
+\end{equation*}
+
+## Assembly (again)
+\begin{equation*}
+\begin{bmatrix}
+M_{u}(u) - \nu L & M_{v}(u) & D_x\\
+M_{u}(v) & M_{v}(v) - \nu L & D_y\\
+C_u & C_v & 0
+\end{bmatrix}
+\begin{bmatrix}
+\mathbf{u} \\
+\mathbf{v} \\
+\mathbf{p}
+\end{bmatrix}
+=
+\begin{bmatrix}
+-\mathbf{b}_{Lu} \color{red}{+ \mathbf{b}_{Mu}} \\
+\mathbf{0} \color{red}{+ \mathbf{b}_{Mv}} \\
+\mathbf{0} \color{red}{+ \mathbf{b}_{C}}
+\end{bmatrix}\\
+\end{equation*}
+
+## Results
+
+![](plots/Re250_Sweby(1.5).png)
+
+## Results + verification
+:::: {.columns}
+::: {.column width="50%"}
+![](plots/RE250_all_limiters.png)
+:::
+
+::: {.column width="50%"}
+![](plots/Re250_all_limiters_zoom.png)
+:::
+::::
+
+## Limiter differences, Re=250
+:::: {.columns}
+::: {.column width="50%"}
+![Streamfunctions](plots/crossplots/streamfunction/N=256/Re=250/all_limiters.png)
+:::
+::: {.column width="50%"}
+![Vorticity](plots/crossplots/vorticity/N=256/Re=250/all_limiters.png)
+:::
+::::
+
+## Limiter differences, Re=250
+:::: {.columns}
+::: {.column width="50%"}
+![Streamfunctions](plots/crossplots/streamfunction/N=256/Re=250/sweby_vanalbada_UD_CD.png)
+:::
+::: {.column width="50%"}
+![Vorticity](plots/crossplots/vorticity/N=256/Re=250/sweby_vanalbada_UD_CD.png)
+:::
+::::
+
+:::aside
+Relative differences ~ 1-3%
+:::
+
+## Limiter differences, Re=4000
+:::: {.columns}
+::: {.column width="33%"}
+![Streamfunctions](plots/crossplots/streamfunction/N=256/Re=4000/all_limiters.png)
+:::
+::: {.column width="33%"}
+![Vorticity](plots/crossplots/vorticity/N=256/Re=4000/all_limiters.png)
+:::
+:::{.column width="33%"}
+![Velocity magnitude](plots/crossplots/velocity_magnitude/N=256/Re=4000/all_limiters.png)
+:::
+::::
+
+:::aside
+Relative differences ~ 10%
+:::
+
+
+
+## References
+::: {#refs}
+:::
