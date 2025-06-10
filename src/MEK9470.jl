@@ -1,5 +1,6 @@
 module MEK9470
-
+using Colors
+using DrWatson
 using Reexport
 using LinearAlgebra
 using SparseArrays
@@ -13,6 +14,7 @@ using JLD2
 using Dates
 using SparseConnectivityTracer, ADTypes
 using NonlinearSolve.NonlinearSolveBase: RelNormSafeBestTerminationMode
+using ProgressMeter
 
 # Basic tools and utilities
 export create_1D_grid
@@ -58,7 +60,10 @@ include("LDCSolver/solver.jl")
 export construct_linear_system, residuals
 
 include("LDCPlotting/plotting.jl")
-export simple_uvp_plot, lid_driven_cavity_plot, plot_velocity_profiles, plot_streamfunction, plot_flow_analysis
+export simple_uvp_plot, lid_driven_cavity_plot, plot_velocity_profiles,
+    plot_streamfunction, plot_flow_analysis, streamfunction_plot, limiter_minima_comparison_plot
+include("LDCPlotting/crossplots.jl")
+export create_crossplot, batch_crossplots
 
 # Flow analysis utilities
 include("LDCUtils.jl/flow_functions.jl")

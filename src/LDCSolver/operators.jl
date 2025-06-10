@@ -344,17 +344,17 @@ get_convection_operators(mesh, ϕ, u, v, limiter, bc)
 returns the convection operators for u and v using TVD scheme
 Supports different boundary conditions on different sides.
 """
-function set_convection_operators!(M_u, M_v, mesh::CartesianMesh, ϕ_f, u, v, limiter::AbstractLimiter,
-    bc::DomainBoundaryConditions=DomainBoundaryConditions())
+function get_convection_operators(mesh::CartesianMesh, ϕ_f)
     N = mesh.N
     dx = dy = 1 / N
+    T = eltype(ϕ_f)
 
     Iu = Int[]
     Ju = Int[]
-    Vu = Float64[]
+    Vu = T[]
     Iv = Int[]
     Jv = Int[]
-    Vv = Float64[]
+    Vv = T[]
 
 
     for i in 1:N, j in 1:N
@@ -363,9 +363,7 @@ function set_convection_operators!(M_u, M_v, mesh::CartesianMesh, ϕ_f, u, v, li
     end
     M_u = sparse(Iu, Ju, Vu .* dx * 0.5, N^2, N^2)
     M_v = sparse(Iv, Jv, Vv .* dy * 0.5, N^2, N^2)
-    # M_u .*= dx * 0.5
-    # M_v .*= dy * 0.5
-    nothing
+    return M_u, M_v
 end
 
 function process_convection_direction!(Iu, Ju, Vu, Iv, Jv, Vv, ϕ_f, mesh, i, j)

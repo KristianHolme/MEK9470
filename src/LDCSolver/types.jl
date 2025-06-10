@@ -12,7 +12,7 @@ struct LinearOperator <: AbstractOperator
     b::AbstractVector
 end
 
-struct ConvectionOperator{T} <: AbstractNonLinearOperator where T<:Number
+mutable struct ConvectionOperator{T} <: AbstractNonLinearOperator where T<:Number
     Muu::AbstractMatrix{T}
     Muv::AbstractMatrix{T}
     Mvu::AbstractMatrix{T}
@@ -29,11 +29,6 @@ struct ConvectionOperator{T} <: AbstractNonLinearOperator where T<:Number
         return new{T}(Muu, Muv, Mvu, Mvv, b_u_corrections, b_v_corrections)
     end
 end
-function ConvectionOperator(mesh::CartesianMesh)
-    return ConvectionOperator(mesh, Float64)
-end
-
-
 
 # Helper function to create ConvectionOperator with element type matching uvp
 function create_convection_operator(mesh::CartesianMesh, uvp::AbstractVector{T}) where T

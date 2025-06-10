@@ -12,8 +12,12 @@ function update_convection_operators!(op::ConvectionOperator,
     @assert length(uvp) == 3(N^2)
     u = @view uvp[1:N^2]
     v = @view uvp[N^2+1:2N^2]
-    set_convection_operators!(op.Muu, op.Muv, mesh, ϕu_f, u, v, limiter, bc_u)
-    set_convection_operators!(op.Mvu, op.Mvv, mesh, ϕv_f, u, v, limiter, bc_v)
+    Muu, Muv = get_convection_operators(mesh, ϕu_f)
+    Mvu, Mvv = get_convection_operators(mesh, ϕv_f)
+    op.Muu = Muu
+    op.Muv = Muv
+    op.Mvu = Mvu
+    op.Mvv = Mvv
     nothing
 end
 
@@ -28,15 +32,11 @@ function construct_linear_system(problem::LDCProblem, uvp::AbstractVector{T}) wh
     u, v, p = split_uvp(uvp, mesh)
 
 
-    conv_op = ConvectionOperator(mesh, T)
 
     ϕu_f = compute_face_values(u, mesh, u, v, ψ, bc_u)
     ϕv_f = compute_face_values(v, mesh, u, v, ψ, bc_v)
-    update_convection_operators!(conv_op, mesh, ϕu_f, ϕv_f, uvp, ψ, bc_u, bc_v)
-    Muu = conv_op.Muu
-    Muv = conv_op.Muv
-    Mvu = conv_op.Mvu
-    Mvv = conv_op.Mvv
+    Muu, Muv = get_convection_operators(mesh, ϕu_f)
+    Mvu, Mvv = get_convection_operators(mesh, ϕv_f)
 
     lap_u = ops.laplacian_u.M
     lap_u_b = ops.laplacian_u.b

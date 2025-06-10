@@ -111,6 +111,30 @@ function lid_driven_cavity_plot(uvp::AbstractVector, mesh::CartesianMesh;
     return fig
 end
 
+function streamfunction_plot(uvp::AbstractVector, mesh::CartesianMesh;
+    title="Streamfunction ψ", Re=1, ψ=VanLeer(), save=false)
+    stream = compute_streamfunction(uvp, mesh)
+    fig = Figure(size=(600, 600))
+    ax = Axis(fig[1, 1], title="Streamfunction, Re = $(Re), ψ = $(string(ψ))", xlabel="x", ylabel="y", aspect=DataAspect())
+    stream_mat = reshape(stream, mesh.N, mesh.N)
+    coords = cell_center.(1:N, 1:N, Ref(mesh))
+    xs = getindex.(coords, Ref(1))
+    ys = getindex.(coords, Ref(2))
+    hm = heatmap!(ax, xs, ys, stream_mat, colormap=:coolwarm)
+    I = argmin(stream_mat)
+    i, j = I[1], I[2]
+    ccx, ccy = cell_center(i, j, mesh)
+    sc = scatter!(ax, [ccx], [ccy], color=:magenta, markersize=10, label="Minimum")
+    text!(ax, ccx + 0.01, ccy + 0.01, text=string("($(round(ccx, digits=3)), $(round(ccy, digits=3)))"), fontsize=12)
+    Colorbar(fig[1, 2], hm)
+
+    if save
+        safesave(plotsdir("ldc", "N=$(mesh.N)", "Re=$(Re)", "$(string(ψ))_streamfunction.png"), fig)
+    end
+
+    return fig
+end
+
 """
     plot_velocity_profiles(uvp, mesh; y_positions=[0.5], x_positions=[0.5])
 
@@ -240,5 +264,145 @@ function plot_flow_analysis(uvp::AbstractVector, mesh::CartesianMesh;)
         ylims!(ax, 0, 1)
     end
 
+    return fig
+end
+
+"""
+    limiter_minima_comparison_plot(N::Int, Re::Int, limiters::Vector{<:AbstractLimiter}; 
+                                  figsize=(800, 600), background_alpha=0.3)
+
+Create a comparison plot showing minimum streamfunction points for different limiters.
+- Background: dim heatmap of streamfunction from first limiter (coolwarm colormap)
+- Scatter points: minimum location for each limiter in distinguishable colors
+- Legend: separate legend showing each limiter
+
+# Arguments
+- `N`: Grid resolution
+- `Re`: Reynolds number  
+- `limiters`: Vector of limiters to compare
+- `figsize`: Figure size tuple
+- `background_alpha`: Transparency of background heatmap
+- `offset_limits`: Tuple (min_dist, max_dist) for random text offset distances
+- `reference_point`: Optional tuple (x, y) for Shenfun reference minimum location
+- `cell_ticks`: If true, set axis ticks to cell center positions
+
+# Returns
+- Makie Figure object
+"""
+function limiter_minima_comparison_plot(N::Int, Re::Int, limiters::Vector{<:AbstractLimiter};
+    figsize=(800, 600), background_alpha=0.3, limits=(nothing, nothing),
+    offset_limits=(0.02, 0.06), reference_point=nothing, cell_ticks=false)
+
+    # Load solutions for all limiters
+    solutions = Dict()
+    streamfunctions = Dict()
+    minima_coords = Vector{Tuple{Float64,Float64}}()
+
+    println("Loading solutions for N=$N, Re=$Re...")
+    @showprogress for limiter in limiters
+        dir = datadir("solutions", "N=$N", "Re=$Re")
+        file_path = joinpath(dir, "$(string(limiter)).jld2")
+
+        if !isfile(file_path)
+            error("Solution file not found: $file_path")
+        end
+
+        data = load(file_path)
+        solutions[limiter] = data["uvp"]
+
+        # Compute streamfunction and find minimum
+        mesh = CartesianMesh(N)
+        stream = compute_streamfunction(data["uvp"], mesh)
+        stream_mat = reshape(stream, N, N)
+        streamfunctions[limiter] = stream_mat
+
+        # Find minimum point coordinates
+        I = argmin(stream_mat)
+        i, j = I[1], I[2]
+        ccx, ccy = cell_center(i, j, mesh)
+        push!(minima_coords, (ccx, ccy))
+    end
+
+    # Create coordinate grids for plotting
+    mesh = CartesianMesh(N)
+    coords = cell_center.(1:N, 1:N, Ref(mesh))
+    xs = getindex.(coords, Ref(1))
+    ys = getindex.(coords, Ref(2))
+
+    # Generate distinguishable colors
+    colors = Colors.distinguishable_colors(length(limiters), [RGB(1, 1, 1), RGB(0, 0, 0)], dropseed=true)
+
+    # Create figure with axis and legend
+    fig = Figure(size=figsize)
+    ax = Axis(fig[1, 1],
+        title="Streamfunction Minima Comparison (N=$N, Re=$Re)",
+        xlabel="x", ylabel="y", aspect=DataAspect(), limits=limits)
+    if cell_ticks
+        ax.xticks = (xs, string.(round.(xs, digits=3)))
+        ax.yticks = (ys, string.(round.(ys, digits=3)))
+    end
+
+    # Background heatmap from first limiter (dim)
+    background_stream = streamfunctions[limiters[1]]
+    hm = heatmap!(ax, xs, ys, background_stream,
+        colormap=:coolwarm, alpha=background_alpha)
+
+    # Plot minimum points for each limiter
+    legend_elements = []
+    legend_labels = String[]
+
+    for (i, limiter) in enumerate(limiters)
+        ccx, ccy = minima_coords[i]
+        color = colors[i]
+
+        sc = scatter!(ax, [ccx], [ccy],
+            color=color, markersize=12, strokewidth=2, strokecolor=:black)
+
+        # Add to legend
+        push!(legend_elements, MarkerElement(color=color, marker=Circle, markersize=12,
+            strokewidth=2, strokecolor=:black))
+        push!(legend_labels, string(limiter))
+
+        # Add limiter label with evenly spaced angles to avoid overlap
+        angle = 2π * (i - 1) / length(limiters)  # Evenly spaced angles
+        distance = rand() * (offset_limits[2] - offset_limits[1]) + offset_limits[1]  # Random distance
+        # offset_x = distance * cos(angle)
+        # offset_y = distance * sin(angle)
+        offset_x = 0.001
+        offset_y = (i - length(limiters) / 2) / length(limiters) * 0.004
+        text_x, text_y = ccx + offset_x, ccy + offset_y
+
+        # Add connecting line from point to text
+        lines!(ax, [ccx, text_x], [ccy, text_y],
+            color=color, linewidth=1.5, alpha=0.7)
+
+        text!(ax, text_x, text_y,
+            text=string(limiter),
+            fontsize=10, color=color, font=:bold)
+    end
+
+    # Add background colorbar
+    Colorbar(fig[1, 2], hm, label="Streamfunction ψ ($(string(limiters[1])))")
+
+    # Add reference point if provided
+    if reference_point !== nothing
+        ref_x, ref_y = reference_point
+        ref_scatter = scatter!(ax, [ref_x], [ref_y],
+            color=:gold, marker=:star5, markersize=16, strokewidth=2, strokecolor=:black)
+
+        # Add to legend
+        push!(legend_elements, MarkerElement(color=:gold, marker=:star5, markersize=16,
+            strokewidth=2, strokecolor=:black))
+        push!(legend_labels, "Shenfun Reference")
+
+        # Add reference label
+        text!(ax, ref_x + 0.02, ref_y + 0.02,
+            text="Shenfun",
+            fontsize=10, color=:gold, font=:bold)
+    end
+
+    # Add legend for limiters
+    Legend(fig[1, 3], legend_elements, legend_labels, "Methods",
+        framevisible=true, margin=(10, 10, 10, 10))
     return fig
 end
